@@ -2,6 +2,7 @@ package com.example.popsandbops.ui.map
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.ZoomIn
@@ -55,6 +57,7 @@ fun SoundMapScreen(
     isRecording: Boolean,
     modifier: Modifier = Modifier,
     onBlobClick: (SoundBlob) -> Unit,
+    onLibraryClick: () -> Unit,
     onRecordClick: () -> Unit,
 ) {
     var pan by remember { mutableStateOf(Offset.Zero) }
@@ -115,7 +118,9 @@ fun SoundMapScreen(
                 .align(Alignment.TopEnd)
                 .padding(top = 54.dp, end = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.End,
         ) {
+            LibraryButton(onClick = onLibraryClick)
             MapToolButton(icon = { Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom in") }) {
                 zoom = (zoom + 0.14f).coerceAtMost(MAX_ZOOM)
             }
@@ -171,6 +176,32 @@ fun SoundMapScreen(
             )
         }
 
+    }
+}
+
+@Composable
+private fun LibraryButton(
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        tonalElevation = 4.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .clickable(onClick = onClick),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.GraphicEq, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(
+                text = "Library",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 

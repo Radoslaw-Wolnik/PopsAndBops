@@ -131,8 +131,46 @@ fun BlobPreview(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
 ) {
-    Canvas(modifier = modifier) {
+    var pulse = 1f
+    var ringProgress = 0f
+    if (isSelected) {
+        val selectedTransition = rememberInfiniteTransition(label = "selected blob preview")
+        val animatedPulse by selectedTransition.animateFloat(
+            initialValue = 0.98f,
+            targetValue = 1.05f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(520),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "selected preview pulse",
+        )
+        val animatedRing by selectedTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 840, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "selected preview ring",
+        )
+        pulse = animatedPulse
+        ringProgress = animatedRing
+    }
+
+    Canvas(modifier = modifier.scale(pulse)) {
         val blobPath = smoothBlobPath(size = size, points = points)
+        if (isSelected) {
+            withTransform({
+                val ringScale = 1f + ringProgress * 0.16f
+                scale(scaleX = ringScale, scaleY = ringScale, pivot = center)
+            }) {
+                drawPath(
+                    path = blobPath,
+                    color = color.copy(alpha = 0.24f * (1f - ringProgress)),
+                    style = Stroke(width = 8.dp.toPx()),
+                )
+            }
+        }
         drawPath(path = blobPath, color = color)
         drawPath(
             path = blobPath,

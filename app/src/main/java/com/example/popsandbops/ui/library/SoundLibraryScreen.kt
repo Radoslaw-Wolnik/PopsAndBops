@@ -1,6 +1,7 @@
 package com.example.popsandbops.ui.library
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,12 +33,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.ui.components.BlobPreview
+import com.example.popsandbops.ui.components.rememberPressFeedback
 import com.example.popsandbops.ui.components.WaveformView
 
 @Composable
@@ -135,17 +138,31 @@ private fun SoundLibraryTile(
     isPlaying: Boolean,
     onClick: () -> Unit,
 ) {
+    val press = rememberPressFeedback(pressedScale = 0.95f)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .height(154.dp)
-            .clickable(onClick = onClick),
+            .scale(press.scale)
+            .clickable(
+                interactionSource = press.interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = if (isPlaying) 6.dp else 2.dp,
+        tonalElevation = when {
+            isPlaying -> 7.dp
+            press.isPressed -> 5.dp
+            else -> 2.dp
+        },
         border = BorderStroke(
-            width = if (isPlaying) 2.dp else 1.dp,
-            color = if (isPlaying) blob.color else MaterialTheme.colorScheme.outline,
+            width = if (isPlaying || press.isPressed) 2.dp else 1.dp,
+            color = when {
+                isPlaying -> blob.color
+                press.isPressed -> blob.color.copy(alpha = 0.72f)
+                else -> MaterialTheme.colorScheme.outline
+            },
         ),
     ) {
         Column(
@@ -185,6 +202,10 @@ private fun SoundLibraryDetail(
     onPlay: () -> Unit,
     onEdit: () -> Unit,
 ) {
+    val backPress = rememberPressFeedback(pressedScale = 0.90f)
+    val editPress = rememberPressFeedback(pressedScale = 0.90f)
+    val playPress = rememberPressFeedback(pressedScale = 0.94f)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -192,14 +213,20 @@ private fun SoundLibraryDetail(
     ) {
         IconButton(
             onClick = onBack,
-            modifier = Modifier.align(Alignment.TopStart),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .scale(backPress.scale),
+            interactionSource = backPress.interactionSource,
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
         }
 
         FilledIconButton(
             onClick = onEdit,
-            modifier = Modifier.align(Alignment.TopEnd),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .scale(editPress.scale),
+            interactionSource = editPress.interactionSource,
         ) {
             Icon(Icons.Filled.Edit, contentDescription = "Edit ${blob.name}")
         }
@@ -264,7 +291,11 @@ private fun SoundLibraryDetail(
                                 fontWeight = FontWeight.Bold,
                             )
                         }
-                        FilledTonalButton(onClick = onPlay) {
+                        FilledTonalButton(
+                            onClick = onPlay,
+                            modifier = Modifier.scale(playPress.scale),
+                            interactionSource = playPress.interactionSource,
+                        ) {
                             Icon(Icons.Filled.PlayArrow, contentDescription = null)
                             Text(text = if (isPlaying) "Playing" else "Play")
                         }

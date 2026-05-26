@@ -22,8 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
@@ -53,6 +53,8 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.BlobDefaults
@@ -95,7 +97,10 @@ fun SoundEditorScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            IconButton(onClick = onClose) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to sound")
+            }
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Edit blob",
                     style = MaterialTheme.typography.headlineSmall,
@@ -107,13 +112,41 @@ fun SoundEditorScreen(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.58f),
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledIconButton(onClick = { onPlay(blob) }) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = "Play ${blob.name}")
-                }
-                FilledIconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close editor")
-                }
+            FilledIconButton(onClick = { onPlay(blob) }) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = "Play ${blob.name}")
+            }
+        }
+
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 1.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                BlobPreview(
+                    color = blob.color,
+                    points = blob.shapePoints,
+                    modifier = Modifier.size(136.dp),
+                )
+                Text(
+                    text = blob.name,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "${if (blob.isRecorded) "Recording" else "Preset tone"} - ${formatMs(blob.durationMs)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                )
             }
         }
 
@@ -245,6 +278,21 @@ fun SoundEditorScreen(
                 },
                 valueRange = 0f..blob.sourceDurationMs.toFloat(),
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = formatMs(blob.trimStartMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                )
+                Text(
+                    text = formatMs(blob.trimEndMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                )
+            }
         }
     }
 }
@@ -380,4 +428,9 @@ private fun insertionIndex(offset: Offset, size: IntSize, count: Int): Int {
     val angle = atan2(offset.y - center.y, offset.x - center.x)
     val normalized = (((angle + PI.toFloat() / 2f) + PI.toFloat() * 2f) % (PI.toFloat() * 2f)) / (PI.toFloat() * 2f)
     return (normalized * count).roundToInt().coerceIn(0, count)
+}
+
+private fun formatMs(ms: Int): String {
+    val totalSeconds = (ms / 1_000f).coerceAtLeast(0f)
+    return "%.1fs".format(totalSeconds)
 }

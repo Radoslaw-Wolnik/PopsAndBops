@@ -21,7 +21,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
 @Preview
 @Composable
 fun PopsAndBopsPreview() {

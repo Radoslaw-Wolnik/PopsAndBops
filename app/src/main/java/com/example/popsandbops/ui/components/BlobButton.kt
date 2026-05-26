@@ -60,7 +60,7 @@ fun BlobButton(
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val blobPath = smoothBlobPath(size = size.toSize(), points = points)
+            val blobPath = smoothBlobPath(size = this.size, points = points)
             drawPath(path = blobPath, color = color)
             drawPath(
                 path = blobPath,
@@ -124,7 +124,7 @@ fun smoothBlobPath(size: Size, points: List<Float>): Path {
     path.moveTo((first.x + second.x) / 2f, (first.y + second.y) / 2f)
     anchors.forEachIndexed { index, anchor ->
         val next = anchors[(index + 1) % anchors.size]
-        path.quadraticBezierTo(
+        path.quadraticTo(
             anchor.x,
             anchor.y,
             (anchor.x + next.x) / 2f,

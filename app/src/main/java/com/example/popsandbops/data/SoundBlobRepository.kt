@@ -79,8 +79,9 @@ class SoundBlobRepository(context: Context) {
     }
 
     private fun JSONObject.toSoundBlob(): SoundBlob {
+        val blobId = getString("id")
         return SoundBlob(
-            id = getString("id"),
+            id = blobId,
             name = getString("name"),
             createdAtMillis = optLong("createdAtMillis", System.currentTimeMillis()),
             position = MapPoint(optDouble("x", 0.0).toFloat(), optDouble("y", 0.0).toFloat()),
@@ -89,7 +90,7 @@ class SoundBlobRepository(context: Context) {
             shapePoints = optJSONArray("shapePoints")?.toFloatList().orEmpty()
                 .ifEmpty { BlobDefaults.shapeLibrary.first().second },
             waveform = optJSONArray("waveform")?.toFloatList().orEmpty()
-                .ifEmpty { BlobDefaults.generatedWaveform(id.hashCode(), 52) },
+                .ifEmpty { BlobDefaults.generatedWaveform(blobId.hashCode(), 52) },
             trimStartMs = optInt("trimStartMs", 0),
             trimEndMs = optInt("trimEndMs", 1000),
             sourceDurationMs = optInt("sourceDurationMs", optInt("trimEndMs", 1000)),

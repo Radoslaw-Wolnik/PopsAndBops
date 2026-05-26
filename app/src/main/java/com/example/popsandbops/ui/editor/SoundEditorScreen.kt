@@ -9,6 +9,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -251,7 +252,7 @@ fun SoundEditorScreen(
 @Composable
 private fun EditorSection(
     title: String,
-    content: @Composable Column.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
         shape = RoundedCornerShape(24.dp),
@@ -280,12 +281,15 @@ private fun ShapeEditorCanvas(
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
     var activePoint by remember { mutableIntStateOf(-1) }
+    val activeHandleColor = MaterialTheme.colorScheme.primary
+    val handleBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+    val editorBackground = MaterialTheme.colorScheme.surfaceVariant
 
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
             .height(260.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(20.dp))
+            .background(editorBackground, RoundedCornerShape(20.dp))
             .onSizeChanged { canvasSize = it }
             .pointerInput(points, canvasSize) {
                 detectTapGestures { offset ->
@@ -330,12 +334,12 @@ private fun ShapeEditorCanvas(
 
         handleOffsets(size, safePoints).forEachIndexed { index, offset ->
             drawCircle(
-                color = if (index == activePoint) MaterialTheme.colorScheme.primary else Color.White,
+                color = if (index == activePoint) activeHandleColor else Color.White,
                 radius = 9.dp.toPx(),
                 center = offset,
             )
             drawCircle(
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                color = handleBorderColor,
                 radius = 9.dp.toPx(),
                 center = offset,
                 style = Stroke(width = 2.dp.toPx()),

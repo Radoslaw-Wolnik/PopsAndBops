@@ -64,6 +64,7 @@ fun RecordingBlobOverlay(
         label = "recording scale",
     )
     val progress = (elapsedMs / AudioRecorder.MAX_RECORDING_MS.toFloat()).coerceIn(0f, 1f)
+    val primary = MaterialTheme.colorScheme.primary
 
     Surface(
         modifier = modifier
@@ -85,7 +86,7 @@ fun RecordingBlobOverlay(
                         color = Color.Red.copy(alpha = 0.12f),
                     )
                     drawArc(
-                        color = MaterialTheme.colorScheme.primary,
+                        color = primary,
                         startAngle = -90f,
                         sweepAngle = 360f * progress,
                         useCenter = false,
@@ -95,7 +96,7 @@ fun RecordingBlobOverlay(
                 Icon(
                     imageVector = Icons.Filled.FiberManualRecord,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = primary,
                 )
             }
             Column(modifier = Modifier.weight(1f, fill = false)) {
@@ -107,7 +108,7 @@ fun RecordingBlobOverlay(
                 WaveformView(
                     waveform = waveform.takeLast(28),
                     modifier = Modifier.fillMaxWidth(),
-                    activeColor = MaterialTheme.colorScheme.primary,
+                    activeColor = primary,
                 )
             }
             FilledIconButton(onClick = onStop, shape = CircleShape) {

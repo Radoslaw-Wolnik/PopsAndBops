@@ -91,6 +91,8 @@ fun PopsAndBopsApp(
                             viewModel.selectBlob(null)
                             viewModel.showSection(SoundboardSection.Library)
                         },
+                        onBlobMoved = { blob, position -> viewModel.updateBlobPosition(blob.id, position) },
+                        onAutoArrange = viewModel::autoArrangePinnedBlobs,
                         onRecordClick = ::requestOrRecord,
                     )
 

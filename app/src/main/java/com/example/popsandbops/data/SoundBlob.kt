@@ -165,7 +165,7 @@ object BlobMapLayout {
         return first
     }
 
-    private fun slotsForRing(ring: Int): Int = 6 + ring * 4
+    fun slotsForRing(ring: Int): Int = 6 + ring * 4
 
     private fun pointOnRing(ring: Int, slot: Int, slots: Int): MapPoint {
         val radius = FirstRingRadius + ring * RingSpacing

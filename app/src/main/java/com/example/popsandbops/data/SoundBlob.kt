@@ -2,8 +2,11 @@ package com.example.popsandbops.data
 
 import androidx.compose.ui.graphics.Color
 import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 enum class BlobShapePreset {
@@ -94,13 +97,7 @@ object BlobDefaults {
     }
 
     fun edgePosition(index: Int): MapPoint {
-        val ring = index / 8
-        val angle = index * 137.5f * (PI.toFloat() / 180f)
-        val radius = 180f + ring * 130f + (index % 3) * 34f
-        return MapPoint(
-            x = cos(angle) * radius,
-            y = sin(angle) * radius,
-        )
+        return BlobMapLayout.suggestedPosition(index)
     }
 
     fun generatedWaveform(seed: Int, size: Int): List<Float> {
@@ -111,4 +108,73 @@ object BlobDefaults {
             shaped.coerceIn(0.12f, 1f)
         }
     }
+}
+
+object BlobMapLayout {
+    const val FirstRingRadius = 180f
+    const val RingSpacing = 130f
+
+    fun suggestedPosition(index: Int): MapPoint {
+        val ring = index / 8
+        val angle = index * 137.5f * (PI.toFloat() / 180f)
+        val radius = 180f + ring * 130f + (index % 3) * 34f
+        return MapPoint(
+            x = cos(angle) * radius,
+            y = sin(angle) * radius,
+        )
+    }
+
+    fun arrangedPosition(index: Int): MapPoint {
+        val ring = ringForIndex(index)
+        val slots = slotsForRing(ring)
+        val slot = index - firstIndexInRing(ring)
+        return pointOnRing(ring, slot, slots)
+    }
+
+    fun snapToArrangeSlot(position: MapPoint): MapPoint {
+        val distance = hypot(position.x, position.y)
+        val ring = ((distance - FirstRingRadius) / RingSpacing)
+            .roundToInt()
+            .coerceAtLeast(0)
+        val slots = slotsForRing(ring)
+        val angle = atan2(position.y, position.x)
+        val normalized = (((angle + PI.toFloat() / 2f) + PI.toFloat() * 2f) % (PI.toFloat() * 2f)) /
+            (PI.toFloat() * 2f)
+        val slot = (normalized * slots).roundToInt().floorMod(slots)
+        return pointOnRing(ring, slot, slots)
+    }
+
+    fun guideRadii(maxDistance: Float): List<Float> {
+        val ringCount = (((maxDistance - FirstRingRadius) / RingSpacing).roundToInt() + 2).coerceAtLeast(3)
+        return List(ringCount) { ring -> FirstRingRadius + ring * RingSpacing }
+    }
+
+    private fun ringForIndex(index: Int): Int {
+        var remaining = index
+        var ring = 0
+        while (remaining >= slotsForRing(ring)) {
+            remaining -= slotsForRing(ring)
+            ring += 1
+        }
+        return ring
+    }
+
+    private fun firstIndexInRing(ring: Int): Int {
+        var first = 0
+        repeat(ring) { first += slotsForRing(it) }
+        return first
+    }
+
+    private fun slotsForRing(ring: Int): Int = 6 + ring * 4
+
+    private fun pointOnRing(ring: Int, slot: Int, slots: Int): MapPoint {
+        val radius = FirstRingRadius + ring * RingSpacing
+        val angle = (slot / slots.toFloat()) * PI.toFloat() * 2f - PI.toFloat() / 2f
+        return MapPoint(
+            x = cos(angle) * radius,
+            y = sin(angle) * radius,
+        )
+    }
+
+    private fun Int.floorMod(modulus: Int): Int = ((this % modulus) + modulus) % modulus
 }

@@ -8,7 +8,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import com.example.popsandbops.audio.AudioRecorder
 import com.example.popsandbops.audio.SoundPlayer
+import com.example.popsandbops.data.BlobMapLayout
 import com.example.popsandbops.data.BlobShapePreset
+import com.example.popsandbops.data.MapPoint
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.data.SoundBlobRepository
 
@@ -177,6 +179,22 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
 
     fun updateBlobTrim(blobId: String, startMs: Int, endMs: Int) {
         updateBlob(blobId) { it.copy(trimStartMs = startMs, trimEndMs = endMs) }
+    }
+
+    fun updateBlobPosition(blobId: String, position: MapPoint) {
+        updateBlob(blobId) { it.copy(position = BlobMapLayout.snapToArrangeSlot(position)) }
+    }
+
+    fun autoArrangePinnedBlobs() {
+        var pinnedIndex = 0
+        val updated = _uiState.value.blobs.map { blob ->
+            if (blob.isPinned) {
+                blob.copy(position = BlobMapLayout.arrangedPosition(pinnedIndex++))
+            } else {
+                blob
+            }
+        }
+        persist(updated)
     }
 
     private fun persist(blobs: List<SoundBlob>) {

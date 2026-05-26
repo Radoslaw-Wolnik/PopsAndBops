@@ -1,51 +1,86 @@
 # PopsAndBops
 
-PopsAndBops is a local-first Kotlin + Jetpack Compose soundboard app. The main screen is a movable dotted sound map with colourful blob buttons, bounded pinch zoom, and a fixed record button in the centre.
+PopsAndBops is a local-first Android soundboard built with Kotlin and Jetpack Compose. It lets you play preset sounds, record short custom clips, arrange sounds on a dotted map, and edit each sound's name, color, shape, pin state, and trim range.
 
-## What It Does
+The app is intentionally device-local: there is no backend, no account system, and no `INTERNET` permission.
 
-- Move around a dotted sound map in every direction.
-- Pinch or use the zoom controls to zoom within a comfortable range.
-- Tap a blob to play it with a small pulse animation.
-- Arrange the map by dragging pinned blobs onto concentric guide rings.
-- Auto-arrange pinned blobs into tidy ring slots.
-- Record a new sound from the centre button.
-- Recordings stop at 10 seconds max.
-- While recording, a floating recording blob shows elapsed time and a live waveform.
-- After recording, trim the waveform, name the sound, and save it.
-- New recordings are added to the outer edge of the map so the board grows outward.
-- Open the library to see every saved sound.
-- Rename sounds from the editor.
-- Pin or unpin sounds from the map while keeping them in the library.
-- Change a blob colour from the built-in palette.
-- Pick a pregenerated blob shape or edit the shape by adding/removing curve points and dragging handles.
-- Revisit the waveform trim later from the editor.
+## Features
 
-## Local-Only Storage
+- Interactive sound map with colorful blob buttons.
+- Pan, pinch zoom, zoom buttons, and quick recentering.
+- Built-in preset tones for a useful board on first launch.
+- Tap any blob to play it with visual playback feedback.
+- Record new sounds with the centered record button.
+- Recording limit of 10 seconds, with elapsed time and a live waveform preview.
+- Trim and name a recording before saving it.
+- Library view for all preset and recorded sounds.
+- Detail view with waveform, duration, playback, and edit access.
+- Editor for renaming sounds, pinning or unpinning them from the map, changing colors, choosing shape presets, editing blob curve points, and adjusting trims.
+- Arrange mode for dragging pinned sounds onto ring slots.
+- Auto-arrange for quickly tidying pinned sounds into concentric rings.
 
-There is no backend. The app does not request the Android `INTERNET` permission.
+## How To Use
 
-Recordings are stored as `.m4a` files in the app's private on-device files directory. Blob metadata such as name, colour, shape, map position, pin state, waveform preview, and trim range is stored in local `SharedPreferences` as JSON.
+1. Launch the app and use the map as the main soundboard.
+2. Tap a blob to play that sound.
+3. Tap the center record button to start recording, then tap stop when finished.
+4. Name and trim the recording in the bottom sheet, then save it.
+5. Open the library from the map to browse every saved sound.
+6. Select a sound to preview it, or tap edit to customize it.
+7. Use Arrange on the map to move pinned sounds manually, or Auto to place them into tidy ring slots.
 
-Android cloud backup is disabled in the manifest so app data stays device-local.
+Android will ask for microphone permission before the first recording. If permission is denied, playback and library browsing still work.
 
-## Code Structure
+## Storage And Privacy
 
-- `data/` contains the sound blob model, preset palette/shape library, map positioning, and local repository.
-- `audio/` contains the `MediaRecorder` wrapper and playback logic for both recorded clips and preset tones.
-- `ui/map/` contains the draggable, arrangeable, and zoomable sound map.
-- `ui/library/` contains the library list.
-- `ui/editor/` contains the blob editor for names, pinning, colours, shape curves, and trims.
-- `ui/recording/` contains the recording overlay and trim/save sheet.
-- `ui/components/` contains reusable blob and waveform drawing components.
-- `ui/theme/` contains the app colour scheme.
+Recordings are saved as `.m4a` files in the app's private files directory. Sound metadata is stored in `SharedPreferences` as JSON, including names, colors, shapes, waveform previews, map positions, pin states, and trim ranges.
 
-## Build
+Android backup is disabled, so app data stays on the device unless the user exports it outside the app through system tools.
 
-From the project root:
+## Project Structure
+
+- `app/src/main/java/com/example/popsandbops/audio/` handles recording and playback.
+- `app/src/main/java/com/example/popsandbops/data/` contains sound models, defaults, persistence, trim safety, and map layout logic.
+- `app/src/main/java/com/example/popsandbops/ui/map/` contains the sound map and arrange mode.
+- `app/src/main/java/com/example/popsandbops/ui/library/` contains the library grid and detail view.
+- `app/src/main/java/com/example/popsandbops/ui/editor/` contains sound editing controls.
+- `app/src/main/java/com/example/popsandbops/ui/recording/` contains the recording overlay and trim/save sheet.
+- `app/src/main/java/com/example/popsandbops/ui/components/` contains shared blob, waveform, and press-feedback UI.
+- `app/src/test/` contains JVM unit tests for pure app logic.
+- `app/src/androidTest/` contains Android instrumentation smoke tests.
+
+## Build And Run
+
+Open the project in Android Studio and run the `app` configuration on an emulator or device running Android 7.0/API 24 or newer.
+
+From the project root on Windows:
 
 ```powershell
-.\gradlew.bat :app:compileDebugKotlin
+.\gradlew.bat :app:assembleDebug
 ```
 
-To install/run from Android Studio, open the project and run the `app` configuration on a device or emulator with microphone permission available.
+The debug APK is written under `app/build/outputs/apk/debug/`.
+
+## Tests And Checks
+
+Run local JVM unit tests:
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest
+```
+
+Run Android lint:
+
+```powershell
+.\gradlew.bat :app:lintDebug
+```
+
+Run instrumentation tests on a connected device or running emulator:
+
+```powershell
+.\gradlew.bat :app:connectedDebugAndroidTest
+```
+
+## Current Quality Notes
+
+The project builds, lint runs successfully, and the JVM unit test suite covers the sound trim rules, default blob data, and map layout logic. Lint may still report dependency-version warnings as the Android Gradle Plugin, Kotlin, and Compose BOM move forward; those are best handled as an explicit dependency upgrade pass.

@@ -26,6 +26,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.popsandbops.ui.editor.SoundEditorScreen
+import com.example.popsandbops.ui.library.SoundLibraryScreen
 import com.example.popsandbops.ui.map.SoundMapScreen
 import com.example.popsandbops.ui.recording.RecordingBlobOverlay
 import com.example.popsandbops.ui.recording.TrimRecordingSheet
@@ -84,24 +86,44 @@ fun PopsAndBopsApp(
         },
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
-            when (state.activeSection) {
-                SoundboardSection.Map -> SoundMapScreen(
-                    blobs = state.pinnedBlobs,
-                    playingBlobId = state.playingBlobId,
-                    isRecording = state.isRecording,
+            val editingBlob = state.editingBlob
+            if (editingBlob != null) {
+                SoundEditorScreen(
+                    blob = editingBlob,
                     modifier = Modifier.fillMaxSize(),
-                    onBlobClick = viewModel::previewBlob,
-                    onRecordClick = ::requestOrRecord,
+                    onClose = viewModel::closeEditor,
+                    onPlay = viewModel::previewBlob,
+                    onNameChange = { viewModel.updateBlobName(editingBlob.id, it) },
+                    onPinnedChange = { viewModel.toggleBlobPinned(editingBlob.id, it) },
+                    onColorChange = { viewModel.updateBlobColor(editingBlob.id, it) },
+                    onShapePresetChange = { preset, points ->
+                        viewModel.updateBlobShape(editingBlob.id, preset, points)
+                    },
+                    onShapePointsChange = { viewModel.updateBlobShapePoints(editingBlob.id, it) },
+                    onTrimChange = { start, end -> viewModel.updateBlobTrim(editingBlob.id, start, end) },
                 )
+            } else {
+                when (state.activeSection) {
+                    SoundboardSection.Map -> SoundMapScreen(
+                        blobs = state.pinnedBlobs,
+                        playingBlobId = state.playingBlobId,
+                        isRecording = state.isRecording,
+                        modifier = Modifier.fillMaxSize(),
+                        onBlobClick = viewModel::previewBlob,
+                        onRecordClick = ::requestOrRecord,
+                    )
 
-                SoundboardSection.Library -> SoundMapScreen(
-                    blobs = state.pinnedBlobs,
-                    playingBlobId = state.playingBlobId,
-                    isRecording = state.isRecording,
-                    modifier = Modifier.fillMaxSize(),
-                    onBlobClick = viewModel::previewBlob,
-                    onRecordClick = ::requestOrRecord,
-                )
+                    SoundboardSection.Library -> SoundLibraryScreen(
+                        blobs = state.blobs,
+                        playingBlobId = state.playingBlobId,
+                        modifier = Modifier.fillMaxSize(),
+                        onPlay = viewModel::previewBlob,
+                        onEdit = { viewModel.startEditing(it.id) },
+                        onPinnedChange = { blob, isPinned ->
+                            viewModel.toggleBlobPinned(blob.id, isPinned)
+                        },
+                    )
+                }
             }
 
             if (state.isRecording) {

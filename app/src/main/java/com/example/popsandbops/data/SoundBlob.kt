@@ -38,6 +38,7 @@ data class SoundBlob(
     val waveform: List<Float>,
     val trimStartMs: Int,
     val trimEndMs: Int,
+    val sourceDurationMs: Int = trimEndMs,
     val isPinned: Boolean = true,
     val audioPath: String? = null,
     val builtInTone: BuiltInTone? = null,

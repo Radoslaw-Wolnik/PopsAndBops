@@ -12,6 +12,7 @@ data class SoundboardUiState(
     val activeSection: SoundboardSection = SoundboardSection.Map,
     val playingBlobId: String? = null,
     val selectedBlobId: String? = null,
+    val editingBlobId: String? = null,
     val isRecording: Boolean = false,
     val recordingElapsedMs: Int = 0,
     val recordingWaveform: List<Float> = emptyList(),
@@ -20,6 +21,9 @@ data class SoundboardUiState(
 ) {
     val pinnedBlobs: List<SoundBlob>
         get() = blobs.filter { it.isPinned }
+
+    val editingBlob: SoundBlob?
+        get() = blobs.firstOrNull { it.id == editingBlobId }
 }
 
 data class PendingRecording(

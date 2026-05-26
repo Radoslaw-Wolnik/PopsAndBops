@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import com.example.popsandbops.audio.AudioRecorder
 import com.example.popsandbops.audio.SoundPlayer
+import com.example.popsandbops.data.BlobShapePreset
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.data.SoundBlobRepository
 
@@ -29,6 +30,18 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
 
     fun selectBlob(blobId: String?) {
         _uiState.value = _uiState.value.copy(selectedBlobId = blobId)
+    }
+
+    fun startEditing(blobId: String) {
+        _uiState.value = _uiState.value.copy(
+            editingBlobId = blobId,
+            selectedBlobId = blobId,
+            activeSection = SoundboardSection.Library,
+        )
+    }
+
+    fun closeEditor() {
+        _uiState.value = _uiState.value.copy(editingBlobId = null)
     }
 
     fun previewBlob(blob: SoundBlob) {
@@ -142,9 +155,40 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
         _uiState.value = _uiState.value.copy(pendingRecording = null)
     }
 
+    fun updateBlobName(blobId: String, name: String) {
+        updateBlob(blobId) { it.copy(name = name) }
+    }
+
+    fun toggleBlobPinned(blobId: String, isPinned: Boolean) {
+        updateBlob(blobId) { it.copy(isPinned = isPinned) }
+    }
+
+    fun updateBlobColor(blobId: String, colorArgb: Long) {
+        updateBlob(blobId) { it.copy(colorArgb = colorArgb) }
+    }
+
+    fun updateBlobShape(blobId: String, shapePreset: BlobShapePreset, points: List<Float>) {
+        updateBlob(blobId) { it.copy(shapePreset = shapePreset, shapePoints = points) }
+    }
+
+    fun updateBlobShapePoints(blobId: String, points: List<Float>) {
+        updateBlob(blobId) { it.copy(shapePoints = points) }
+    }
+
+    fun updateBlobTrim(blobId: String, startMs: Int, endMs: Int) {
+        updateBlob(blobId) { it.copy(trimStartMs = startMs, trimEndMs = endMs) }
+    }
+
     private fun persist(blobs: List<SoundBlob>) {
         repository.saveBlobs(blobs)
         _uiState.value = _uiState.value.copy(blobs = blobs)
+    }
+
+    private fun updateBlob(blobId: String, transform: (SoundBlob) -> SoundBlob) {
+        val updated = _uiState.value.blobs.map { blob ->
+            if (blob.id == blobId) transform(blob) else blob
+        }
+        persist(updated)
     }
 
     private fun tickRecording() {

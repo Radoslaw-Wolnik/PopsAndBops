@@ -88,6 +88,24 @@ fun BlobButton(
     }
 }
 
+@Composable
+fun BlobPreview(
+    color: Color,
+    points: List<Float>,
+    modifier: Modifier = Modifier,
+    isSelected: Boolean = false,
+) {
+    Canvas(modifier = modifier) {
+        val blobPath = smoothBlobPath(size = size, points = points)
+        drawPath(path = blobPath, color = color)
+        drawPath(
+            path = blobPath,
+            color = Color.White.copy(alpha = if (isSelected) 0.95f else 0.58f),
+            style = Stroke(width = if (isSelected) 4.dp.toPx() else 2.dp.toPx()),
+        )
+    }
+}
+
 fun smoothBlobPath(size: Size, points: List<Float>): Path {
     val safePoints = points.ifEmpty { List(8) { 1f } }
     val center = Offset(size.width / 2f, size.height / 2f)

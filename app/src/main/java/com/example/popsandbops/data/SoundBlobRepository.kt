@@ -72,6 +72,7 @@ class SoundBlobRepository(context: Context) {
             .put("waveform", JSONArray(waveform))
             .put("trimStartMs", trimStartMs)
             .put("trimEndMs", trimEndMs)
+            .put("sourceDurationMs", sourceDurationMs)
             .put("isPinned", isPinned)
             .put("audioPath", audioPath)
             .put("builtInTone", builtInTone?.name)
@@ -91,6 +92,7 @@ class SoundBlobRepository(context: Context) {
                 .ifEmpty { BlobDefaults.generatedWaveform(id.hashCode(), 52) },
             trimStartMs = optInt("trimStartMs", 0),
             trimEndMs = optInt("trimEndMs", 1000),
+            sourceDurationMs = optInt("sourceDurationMs", optInt("trimEndMs", 1000)),
             isPinned = optBoolean("isPinned", true),
             audioPath = optString("audioPath").takeIf { it.isNotBlank() && it != "null" },
             builtInTone = optString("builtInTone").takeIf { it.isNotBlank() && it != "null" }

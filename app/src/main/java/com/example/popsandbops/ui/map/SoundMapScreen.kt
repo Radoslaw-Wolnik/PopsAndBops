@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.FloatingActionButton
@@ -51,6 +52,7 @@ import kotlin.math.roundToInt
 fun SoundMapScreen(
     blobs: List<SoundBlob>,
     playingBlobId: String?,
+    isRecording: Boolean,
     modifier: Modifier = Modifier,
     onBlobClick: (SoundBlob) -> Unit,
     onRecordClick: () -> Unit,
@@ -158,13 +160,13 @@ fun SoundMapScreen(
                 .align(Alignment.Center)
                 .size(86.dp),
             shape = CircleShape,
-            containerColor = MaterialTheme.colorScheme.primary,
+            containerColor = if (isRecording) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
         ) {
             Icon(
-                imageVector = Icons.Filled.FiberManualRecord,
-                contentDescription = "Record sound",
+                imageVector = if (isRecording) Icons.Filled.Stop else Icons.Filled.FiberManualRecord,
+                contentDescription = if (isRecording) "Stop recording" else "Record sound",
                 modifier = Modifier.size(40.dp),
             )
         }

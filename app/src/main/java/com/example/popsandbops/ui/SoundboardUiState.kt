@@ -13,8 +13,20 @@ data class SoundboardUiState(
     val playingBlobId: String? = null,
     val selectedBlobId: String? = null,
     val isRecording: Boolean = false,
+    val recordingElapsedMs: Int = 0,
+    val recordingWaveform: List<Float> = emptyList(),
+    val pendingRecording: PendingRecording? = null,
     val message: String? = null,
 ) {
     val pinnedBlobs: List<SoundBlob>
         get() = blobs.filter { it.isPinned }
 }
+
+data class PendingRecording(
+    val path: String,
+    val durationMs: Int,
+    val waveform: List<Float>,
+    val name: String,
+    val trimStartMs: Int = 0,
+    val trimEndMs: Int = durationMs,
+)

@@ -87,19 +87,26 @@ fun PopsAndBopsApp(
                         isRecording = state.isRecording,
                         modifier = Modifier.fillMaxSize(),
                         onBlobClick = viewModel::previewBlob,
-                        onLibraryClick = { viewModel.showSection(SoundboardSection.Library) },
+                        onLibraryClick = {
+                            viewModel.selectBlob(null)
+                            viewModel.showSection(SoundboardSection.Library)
+                        },
                         onRecordClick = ::requestOrRecord,
                     )
 
                     SoundboardSection.Library -> SoundLibraryScreen(
                         blobs = state.blobs,
+                        selectedBlob = state.selectedBlob,
                         playingBlobId = state.playingBlobId,
                         modifier = Modifier.fillMaxSize(),
+                        onSelect = { viewModel.selectBlob(it.id) },
+                        onBackToMap = {
+                            viewModel.selectBlob(null)
+                            viewModel.showSection(SoundboardSection.Map)
+                        },
+                        onBackToGrid = { viewModel.selectBlob(null) },
                         onPlay = viewModel::previewBlob,
                         onEdit = { viewModel.startEditing(it.id) },
-                        onPinnedChange = { blob, isPinned ->
-                            viewModel.toggleBlobPinned(blob.id, isPinned)
-                        },
                     )
                 }
             }

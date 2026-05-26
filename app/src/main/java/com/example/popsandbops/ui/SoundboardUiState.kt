@@ -24,6 +24,9 @@ data class SoundboardUiState(
 
     val editingBlob: SoundBlob?
         get() = blobs.firstOrNull { it.id == editingBlobId }
+
+    val selectedBlob: SoundBlob?
+        get() = blobs.firstOrNull { it.id == selectedBlobId }
 }
 
 data class PendingRecording(

@@ -1,54 +1,107 @@
 package com.example.popsandbops.ui.library
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.ui.components.BlobPreview
+import com.example.popsandbops.ui.components.WaveformView
 
 @Composable
 fun SoundLibraryScreen(
     blobs: List<SoundBlob>,
+    selectedBlob: SoundBlob?,
     playingBlobId: String?,
     modifier: Modifier = Modifier,
+    onSelect: (SoundBlob) -> Unit,
+    onBackToMap: () -> Unit,
+    onBackToGrid: () -> Unit,
     onPlay: (SoundBlob) -> Unit,
     onEdit: (SoundBlob) -> Unit,
-    onPinnedChange: (SoundBlob, Boolean) -> Unit,
 ) {
-    LazyColumn(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        item {
-            Column(modifier = Modifier.padding(top = 48.dp, bottom = 6.dp)) {
+        if (selectedBlob == null) {
+            SoundLibraryGrid(
+                blobs = blobs,
+                playingBlobId = playingBlobId,
+                onSelect = onSelect,
+                onBackToMap = onBackToMap,
+            )
+        } else {
+            SoundLibraryDetail(
+                blob = selectedBlob,
+                isPlaying = playingBlobId == selectedBlob.id,
+                onBack = onBackToGrid,
+                onPlay = { onPlay(selectedBlob) },
+                onEdit = { onEdit(selectedBlob) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SoundLibraryGrid(
+    blobs: List<SoundBlob>,
+    playingBlobId: String?,
+    onSelect: (SoundBlob) -> Unit,
+    onBackToMap: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 18.dp)
+            .padding(top = 42.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBackToMap) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to map")
+            }
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Sound library",
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Black,
                 )
                 Text(
@@ -58,70 +111,179 @@ fun SoundLibraryScreen(
                 )
             }
         }
-        items(items = blobs, key = { it.id }) { blob ->
-            SoundLibraryRow(
-                blob = blob,
-                isPlaying = playingBlobId == blob.id,
-                onPlay = { onPlay(blob) },
-                onEdit = { onEdit(blob) },
-                onPinnedChange = { onPinnedChange(blob, it) },
-            )
-        }
-        item {
-            Spacer(modifier = Modifier.size(18.dp))
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 116.dp),
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(items = blobs, key = { it.id }) { blob ->
+                SoundLibraryTile(
+                    blob = blob,
+                    isPlaying = playingBlobId == blob.id,
+                    onClick = { onSelect(blob) },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun SoundLibraryRow(
+private fun SoundLibraryTile(
     blob: SoundBlob,
     isPlaying: Boolean,
-    onPlay: () -> Unit,
-    onEdit: () -> Unit,
-    onPinnedChange: (Boolean) -> Unit,
+    onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(154.dp)
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = if (isPlaying) 5.dp else 1.dp,
+        tonalElevation = if (isPlaying) 6.dp else 2.dp,
+        border = BorderStroke(
+            width = if (isPlaying) 2.dp else 1.dp,
+            color = if (isPlaying) blob.color else MaterialTheme.colorScheme.outline,
+        ),
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             BlobPreview(
                 color = blob.color,
                 points = blob.shapePoints,
-                modifier = Modifier.size(58.dp),
+                modifier = Modifier.size(72.dp),
                 isSelected = isPlaying,
             )
-            Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = blob.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = if (blob.isRecorded) "Recording" else "Preset",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SoundLibraryDetail(
+    blob: SoundBlob,
+    isPlaying: Boolean,
+    onBack: () -> Unit,
+    onPlay: () -> Unit,
+    onEdit: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 18.dp, vertical = 42.dp),
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier.align(Alignment.TopStart),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
+        }
+
+        FilledIconButton(
+            onClick = onEdit,
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            Icon(Icons.Filled.Edit, contentDescription = "Edit ${blob.name}")
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .widthIn(max = 420.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            BlobPreview(
+                color = blob.color,
+                points = blob.shapePoints,
+                modifier = Modifier.size(190.dp),
+                isSelected = isPlaying,
+            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = blob.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = if (blob.isRecorded) "Recording" else "Preset tone",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+                    text = "${if (blob.isRecorded) "Recording" else "Preset tone"} - ${formatMs(blob.durationMs)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.62f),
                 )
             }
-            Switch(
-                checked = blob.isPinned,
-                onCheckedChange = onPinnedChange,
-            )
-            IconButton(onClick = onPlay) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = "Play ${blob.name}")
-            }
-            IconButton(onClick = onEdit) {
-                Icon(Icons.Filled.Edit, contentDescription = "Edit ${blob.name}")
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp,
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.GraphicEq,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = blob.color,
+                            )
+                            Text(
+                                text = if (blob.isPinned) "On map" else "Library only",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        FilledTonalButton(onClick = onPlay) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                            Text(text = if (isPlaying) "Playing" else "Play")
+                        }
+                    }
+
+                    WaveformView(
+                        waveform = blob.waveform,
+                        durationMs = blob.sourceDurationMs,
+                        trimStartMs = blob.trimStartMs,
+                        trimEndMs = blob.trimEndMs,
+                        activeColor = blob.color,
+                    )
+                }
             }
         }
     }
+}
+
+private fun formatMs(ms: Int): String {
+    val totalSeconds = (ms / 1_000f).coerceAtLeast(0f)
+    return "%.1fs".format(totalSeconds)
 }

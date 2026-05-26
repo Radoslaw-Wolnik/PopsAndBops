@@ -2,10 +2,15 @@ package com.example.popsandbops.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+val Ink = Color(0xFF17151F)
+val Paper = Color(0xFFFFFCF3)
+val PaperWarm = Color(0xFFFFF4D7)
+val BubbleBlue = Color(0xFF55BCEB)
+val BubbleGreen = Color(0xFF32C7A3)
+val BubblePink = Color(0xFFFF5A7A)
+val BubbleYellow = Color(0xFFFFC857)
+val QuietLine = Color(0xFFE5DDC7)
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val Night = Color(0xFF121018)
+val NightPanel = Color(0xFF1C1925)
+val NightLine = Color(0xFF373142)

@@ -7,6 +7,8 @@ PopsAndBops is a local-first Kotlin + Jetpack Compose soundboard app. The main s
 - Move around a dotted sound map in every direction.
 - Pinch or use the zoom controls to zoom within a comfortable range.
 - Tap a blob to play it with a small pulse animation.
+- Arrange the map by dragging pinned blobs onto concentric guide rings.
+- Auto-arrange pinned blobs into tidy ring slots.
 - Record a new sound from the centre button.
 - Recordings stop at 10 seconds max.
 - While recording, a floating recording blob shows elapsed time and a live waveform.
@@ -31,7 +33,7 @@ Android cloud backup is disabled in the manifest so app data stays device-local.
 
 - `data/` contains the sound blob model, preset palette/shape library, map positioning, and local repository.
 - `audio/` contains the `MediaRecorder` wrapper and playback logic for both recorded clips and preset tones.
-- `ui/map/` contains the draggable and zoomable sound map.
+- `ui/map/` contains the draggable, arrangeable, and zoomable sound map.
 - `ui/library/` contains the library list.
 - `ui/editor/` contains the blob editor for names, pinning, colours, shape curves, and trims.
 - `ui/recording/` contains the recording overlay and trim/save sheet.

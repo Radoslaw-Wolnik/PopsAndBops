@@ -1,6 +1,7 @@
 package com.example.popsandbops.ui.editor
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -45,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -61,6 +63,7 @@ import com.example.popsandbops.data.BlobDefaults
 import com.example.popsandbops.data.BlobShapePreset
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.ui.components.BlobPreview
+import com.example.popsandbops.ui.components.rememberPressFeedback
 import com.example.popsandbops.ui.components.WaveformView
 import com.example.popsandbops.ui.components.smoothBlobPath
 import kotlin.math.PI
@@ -84,6 +87,11 @@ fun SoundEditorScreen(
     onShapePointsChange: (List<Float>) -> Unit,
     onTrimChange: (Int, Int) -> Unit,
 ) {
+    val backPress = rememberPressFeedback(pressedScale = 0.90f)
+    val playPress = rememberPressFeedback(pressedScale = 0.90f)
+    val addPointPress = rememberPressFeedback(pressedScale = 0.95f)
+    val removePointPress = rememberPressFeedback(pressedScale = 0.90f)
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -97,7 +105,11 @@ fun SoundEditorScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) {
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.scale(backPress.scale),
+                interactionSource = backPress.interactionSource,
+            ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to sound")
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -112,7 +124,11 @@ fun SoundEditorScreen(
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.58f),
                 )
             }
-            FilledIconButton(onClick = { onPlay(blob) }) {
+            FilledIconButton(
+                onClick = { onPlay(blob) },
+                modifier = Modifier.scale(playPress.scale),
+                interactionSource = playPress.interactionSource,
+            ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = "Play ${blob.name}")
             }
         }
@@ -189,10 +205,15 @@ fun SoundEditorScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 BlobDefaults.palette.forEach { colorArgb ->
+                    val press = rememberPressFeedback(pressedScale = 0.88f)
                     Surface(
                         modifier = Modifier
                             .size(48.dp)
-                            .clickable { onColorChange(colorArgb) },
+                            .scale(press.scale)
+                            .clickable(
+                                interactionSource = press.interactionSource,
+                                indication = LocalIndication.current,
+                            ) { onColorChange(colorArgb) },
                         shape = CircleShape,
                         color = Color(colorArgb),
                         border = androidx.compose.foundation.BorderStroke(
@@ -212,12 +233,18 @@ fun SoundEditorScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 BlobDefaults.shapeLibrary.forEach { (preset, points) ->
+                    val press = rememberPressFeedback(pressedScale = 0.92f)
                     Surface(
                         modifier = Modifier
                             .size(72.dp)
-                            .clickable { onShapePresetChange(preset, points) },
+                            .scale(press.scale)
+                            .clickable(
+                                interactionSource = press.interactionSource,
+                                indication = LocalIndication.current,
+                            ) { onShapePresetChange(preset, points) },
                         shape = RoundedCornerShape(18.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
+                        tonalElevation = if (press.isPressed) 5.dp else 0.dp,
                         border = androidx.compose.foundation.BorderStroke(
                             width = if (blob.shapePreset == preset) 3.dp else 1.dp,
                             color = if (blob.shapePreset == preset) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
@@ -247,6 +274,8 @@ fun SoundEditorScreen(
                             onShapePointsChange(next)
                         }
                     },
+                    modifier = Modifier.scale(addPointPress.scale),
+                    interactionSource = addPointPress.interactionSource,
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Spacer(Modifier.size(8.dp))
@@ -255,6 +284,8 @@ fun SoundEditorScreen(
                 IconButton(
                     enabled = blob.shapePoints.size > 5,
                     onClick = { onShapePointsChange(blob.shapePoints.dropLast(1)) },
+                    modifier = Modifier.scale(removePointPress.scale),
+                    interactionSource = removePointPress.interactionSource,
                 ) {
                     Icon(Icons.Filled.Remove, contentDescription = "Remove point")
                 }

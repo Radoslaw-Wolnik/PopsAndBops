@@ -1,5 +1,6 @@
 package com.example.popsandbops.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -23,6 +24,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,7 +44,9 @@ fun BlobButton(
     size: Dp = 92.dp,
     onClick: () -> Unit,
 ) {
-    val pulse by rememberInfiniteTransition(label = "blob pulse").animateFloat(
+    val press = rememberPressFeedback(pressedScale = 0.88f)
+    val playingTransition = rememberInfiniteTransition(label = "blob playing")
+    val pulse by playingTransition.animateFloat(
         initialValue = 0.96f,
         targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
@@ -51,27 +55,59 @@ fun BlobButton(
         ),
         label = "blob scale",
     )
+    val ringProgress by playingTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 780, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "blob play ring",
+    )
 
     Box(
         modifier = modifier
             .size(size)
             .scale(if (isPlaying) pulse else 1f)
-            .clickable(onClick = onClick),
+            .scale(press.scale)
+            .clickable(
+                interactionSource = press.interactionSource,
+                indication = null,
+                onClick = onClick,
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val blobPath = smoothBlobPath(size = this.size, points = points)
+            if (isPlaying) {
+                withTransform({
+                    val ringScale = 1f + ringProgress * 0.18f
+                    scale(scaleX = ringScale, scaleY = ringScale, pivot = center)
+                }) {
+                    drawPath(
+                        path = blobPath,
+                        color = color.copy(alpha = 0.28f * (1f - ringProgress)),
+                        style = Stroke(width = 10.dp.toPx()),
+                    )
+                }
+            }
             drawPath(path = blobPath, color = color)
+            if (press.isPressed) {
+                drawPath(
+                    path = blobPath,
+                    color = Color.White.copy(alpha = 0.20f),
+                )
+            }
             drawPath(
                 path = blobPath,
-                color = Color.White.copy(alpha = 0.68f),
-                style = Stroke(width = 3.dp.toPx()),
+                color = Color.White.copy(alpha = if (isPlaying) 0.92f else 0.68f),
+                style = Stroke(width = if (isPlaying) 4.dp.toPx() else 3.dp.toPx()),
             )
             if (isPlaying) {
                 drawPath(
                     path = blobPath,
-                    color = Color.Black.copy(alpha = 0.16f),
-                    style = Stroke(width = 8.dp.toPx()),
+                    color = Color.Black.copy(alpha = 0.13f),
+                    style = Stroke(width = 7.dp.toPx()),
                 )
             }
         }

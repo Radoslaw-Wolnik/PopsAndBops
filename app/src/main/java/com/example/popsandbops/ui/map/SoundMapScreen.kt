@@ -1,6 +1,7 @@
 package com.example.popsandbops.ui.map
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -25,7 +26,6 @@ import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.ui.components.BlobButton
+import com.example.popsandbops.ui.components.rememberPressFeedback
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
@@ -66,6 +68,7 @@ fun SoundMapScreen(
     val background = MaterialTheme.colorScheme.background
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.76f)
     val ringColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+    val recordPress = rememberPressFeedback(pressedScale = 0.90f)
 
     BoxWithConstraints(
         modifier = modifier
@@ -163,11 +166,13 @@ fun SoundMapScreen(
             onClick = onRecordClick,
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(86.dp),
+                .size(86.dp)
+                .scale(recordPress.scale),
             shape = CircleShape,
             containerColor = if (isRecording) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
+            interactionSource = recordPress.interactionSource,
         ) {
             Icon(
                 imageVector = if (isRecording) Icons.Filled.Stop else Icons.Filled.FiberManualRecord,
@@ -183,15 +188,21 @@ fun SoundMapScreen(
 private fun LibraryButton(
     onClick: () -> Unit,
 ) {
+    val press = rememberPressFeedback(pressedScale = 0.94f)
     Surface(
+        modifier = Modifier
+            .scale(press.scale)
+            .clickable(
+                interactionSource = press.interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        tonalElevation = 4.dp,
+        tonalElevation = if (press.isPressed) 7.dp else 4.dp,
     ) {
         Row(
-            modifier = Modifier
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-                .clickable(onClick = onClick),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -210,12 +221,24 @@ private fun MapToolButton(
     icon: @Composable () -> Unit,
     onClick: () -> Unit,
 ) {
+    val press = rememberPressFeedback(pressedScale = 0.90f)
     Surface(
+        modifier = Modifier
+            .size(46.dp)
+            .scale(press.scale)
+            .clickable(
+                interactionSource = press.interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        tonalElevation = 4.dp,
+        tonalElevation = if (press.isPressed) 7.dp else 4.dp,
     ) {
-        IconButton(onClick = onClick, modifier = Modifier.size(46.dp)) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
             icon()
         }
     }

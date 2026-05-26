@@ -35,7 +35,11 @@ fun PopsAndBopsApp(
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
-        if (isGranted) viewModel.startRecording()
+        if (isGranted) {
+            viewModel.startRecording()
+        } else {
+            viewModel.showRecordingPermissionDenied()
+        }
     }
 
     fun requestOrRecord() {
@@ -55,7 +59,10 @@ fun PopsAndBopsApp(
     }
 
     LaunchedEffect(state.message) {
-        state.message?.let { snackbarHostState.showSnackbar(it) }
+        state.message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessage()
+        }
     }
 
     Scaffold(

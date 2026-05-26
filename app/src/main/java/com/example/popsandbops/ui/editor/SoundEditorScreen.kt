@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.BlobDefaults
 import com.example.popsandbops.data.BlobShapePreset
 import com.example.popsandbops.data.SoundBlob
+import com.example.popsandbops.data.sanitizeTrimRange
 import com.example.popsandbops.ui.components.BlobPreview
 import com.example.popsandbops.ui.components.rememberPressFeedback
 import com.example.popsandbops.ui.components.WaveformView
@@ -91,6 +92,8 @@ fun SoundEditorScreen(
     val playPress = rememberPressFeedback(pressedScale = 0.90f)
     val addPointPress = rememberPressFeedback(pressedScale = 0.95f)
     val removePointPress = rememberPressFeedback(pressedScale = 0.90f)
+    val sourceDurationMs = blob.safeSourceDurationMs
+    val trimRange = blob.trimRange
 
     Column(
         modifier = modifier
@@ -295,31 +298,34 @@ fun SoundEditorScreen(
         EditorSection(title = "Trim") {
             WaveformView(
                 waveform = blob.waveform,
-                durationMs = blob.sourceDurationMs,
-                trimStartMs = blob.trimStartMs,
-                trimEndMs = blob.trimEndMs,
+                durationMs = sourceDurationMs,
+                trimStartMs = trimRange.startMs,
+                trimEndMs = trimRange.endMs,
                 activeColor = blob.color,
             )
             RangeSlider(
-                value = blob.trimStartMs.toFloat()..blob.trimEndMs.toFloat(),
+                value = trimRange.startMs.toFloat()..trimRange.endMs.toFloat(),
                 onValueChange = { range ->
-                    val start = range.start.roundToInt().coerceIn(0, blob.sourceDurationMs - 200)
-                    val end = range.endInclusive.roundToInt().coerceIn(start + 200, blob.sourceDurationMs)
-                    onTrimChange(start, end)
+                    val trim = sanitizeTrimRange(
+                        startMs = range.start.roundToInt(),
+                        endMs = range.endInclusive.roundToInt(),
+                        sourceDurationMs = sourceDurationMs,
+                    )
+                    onTrimChange(trim.startMs, trim.endMs)
                 },
-                valueRange = 0f..blob.sourceDurationMs.toFloat(),
+                valueRange = 0f..sourceDurationMs.toFloat(),
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = formatMs(blob.trimStartMs),
+                    text = formatMs(trimRange.startMs),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
                 )
                 Text(
-                    text = formatMs(blob.trimEndMs),
+                    text = formatMs(trimRange.endMs),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
                 )

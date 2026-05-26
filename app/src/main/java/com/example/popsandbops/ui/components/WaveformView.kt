@@ -26,10 +26,11 @@ fun WaveformView(
             .fillMaxWidth()
             .height(92.dp),
     ) {
+        val safeDurationMs = durationMs.coerceAtLeast(1)
         val bars = waveform.ifEmpty { List(48) { 0.14f } }
         val barGap = size.width / bars.size
-        val startFraction = (trimStartMs / durationMs.toFloat()).coerceIn(0f, 1f)
-        val endFraction = (trimEndMs / durationMs.toFloat()).coerceIn(0f, 1f)
+        val startFraction = (trimStartMs / safeDurationMs.toFloat()).coerceIn(0f, 1f)
+        val endFraction = (trimEndMs / safeDurationMs.toFloat()).coerceIn(0f, 1f)
         bars.forEachIndexed { index, value ->
             val x = index * barGap + barGap / 2f
             val fraction = index / bars.lastIndex.coerceAtLeast(1).toFloat()

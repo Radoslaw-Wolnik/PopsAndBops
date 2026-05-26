@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.audio.AudioRecorder
+import com.example.popsandbops.data.sanitizeTrimRange
 import com.example.popsandbops.ui.PendingRecording
 import com.example.popsandbops.ui.components.WaveformView
 import kotlin.math.roundToInt
@@ -128,6 +129,9 @@ fun TrimRecordingSheet(
     onSave: () -> Unit,
     onDiscard: () -> Unit,
 ) {
+    val durationMs = pendingRecording.safeDurationMs
+    val trimRange = pendingRecording.trimRange
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -166,20 +170,23 @@ fun TrimRecordingSheet(
 
             WaveformView(
                 waveform = pendingRecording.waveform,
-                durationMs = pendingRecording.durationMs,
-                trimStartMs = pendingRecording.trimStartMs,
-                trimEndMs = pendingRecording.trimEndMs,
+                durationMs = durationMs,
+                trimStartMs = trimRange.startMs,
+                trimEndMs = trimRange.endMs,
                 activeColor = MaterialTheme.colorScheme.primary,
             )
 
             RangeSlider(
-                value = pendingRecording.trimStartMs.toFloat()..pendingRecording.trimEndMs.toFloat(),
+                value = trimRange.startMs.toFloat()..trimRange.endMs.toFloat(),
                 onValueChange = { range ->
-                    val start = range.start.roundToInt().coerceIn(0, pendingRecording.durationMs - 200)
-                    val end = range.endInclusive.roundToInt().coerceIn(start + 200, pendingRecording.durationMs)
-                    onTrimChange(start, end)
+                    val trim = sanitizeTrimRange(
+                        startMs = range.start.roundToInt(),
+                        endMs = range.endInclusive.roundToInt(),
+                        sourceDurationMs = durationMs,
+                    )
+                    onTrimChange(trim.startMs, trim.endMs)
                 },
-                valueRange = 0f..pendingRecording.durationMs.toFloat(),
+                valueRange = 0f..durationMs.toFloat(),
             )
 
             Row(
@@ -188,7 +195,7 @@ fun TrimRecordingSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "${formatMs(pendingRecording.trimStartMs)} - ${formatMs(pendingRecording.trimEndMs)}",
+                    text = "${formatMs(trimRange.startMs)} - ${formatMs(trimRange.endMs)}",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
                 )

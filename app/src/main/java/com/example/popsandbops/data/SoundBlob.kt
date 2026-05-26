@@ -9,6 +9,8 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
+const val MIN_SOUND_DURATION_MS = 250
+
 enum class BlobShapePreset {
     Splash,
     Pebble,
@@ -30,6 +32,14 @@ data class MapPoint(
     val y: Float,
 )
 
+data class TrimRange(
+    val startMs: Int,
+    val endMs: Int,
+) {
+    val durationMs: Int
+        get() = endMs - startMs
+}
+
 data class SoundBlob(
     val id: String,
     val name: String,
@@ -49,11 +59,29 @@ data class SoundBlob(
     val color: Color
         get() = Color(colorArgb)
 
+    val safeSourceDurationMs: Int
+        get() = sourceDurationMs.coerceAtLeast(MIN_SOUND_DURATION_MS)
+
+    val trimRange: TrimRange
+        get() = sanitizeTrimRange(trimStartMs, trimEndMs, safeSourceDurationMs)
+
     val durationMs: Int
-        get() = max(250, trimEndMs - trimStartMs)
+        get() = max(MIN_SOUND_DURATION_MS, trimRange.durationMs)
 
     val isRecorded: Boolean
         get() = audioPath != null
+}
+
+fun sanitizeTrimRange(
+    startMs: Int,
+    endMs: Int,
+    sourceDurationMs: Int,
+): TrimRange {
+    val safeDurationMs = sourceDurationMs.coerceAtLeast(MIN_SOUND_DURATION_MS)
+    val latestStartMs = (safeDurationMs - MIN_SOUND_DURATION_MS).coerceAtLeast(0)
+    val safeStartMs = startMs.coerceIn(0, latestStartMs)
+    val safeEndMs = endMs.coerceIn(safeStartMs + MIN_SOUND_DURATION_MS, safeDurationMs)
+    return TrimRange(safeStartMs, safeEndMs)
 }
 
 object BlobDefaults {

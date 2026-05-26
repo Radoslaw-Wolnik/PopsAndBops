@@ -205,6 +205,8 @@ private fun SoundLibraryDetail(
     val backPress = rememberPressFeedback(pressedScale = 0.90f)
     val editPress = rememberPressFeedback(pressedScale = 0.90f)
     val playPress = rememberPressFeedback(pressedScale = 0.94f)
+    val sourceDurationMs = blob.safeSourceDurationMs
+    val trimRange = blob.trimRange
 
     Box(
         modifier = Modifier
@@ -303,9 +305,9 @@ private fun SoundLibraryDetail(
 
                     WaveformView(
                         waveform = blob.waveform,
-                        durationMs = blob.sourceDurationMs,
-                        trimStartMs = blob.trimStartMs,
-                        trimEndMs = blob.trimEndMs,
+                        durationMs = sourceDurationMs,
+                        trimStartMs = trimRange.startMs,
+                        trimEndMs = trimRange.endMs,
                         activeColor = blob.color,
                     )
                 }

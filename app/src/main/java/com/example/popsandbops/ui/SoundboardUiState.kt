@@ -1,6 +1,9 @@
 package com.example.popsandbops.ui
 
+import com.example.popsandbops.data.MIN_SOUND_DURATION_MS
 import com.example.popsandbops.data.SoundBlob
+import com.example.popsandbops.data.TrimRange
+import com.example.popsandbops.data.sanitizeTrimRange
 
 enum class SoundboardSection {
     Map,
@@ -36,4 +39,10 @@ data class PendingRecording(
     val name: String,
     val trimStartMs: Int = 0,
     val trimEndMs: Int = durationMs,
-)
+) {
+    val safeDurationMs: Int
+        get() = durationMs.coerceAtLeast(MIN_SOUND_DURATION_MS)
+
+    val trimRange: TrimRange
+        get() = sanitizeTrimRange(trimStartMs, trimEndMs, safeDurationMs)
+}

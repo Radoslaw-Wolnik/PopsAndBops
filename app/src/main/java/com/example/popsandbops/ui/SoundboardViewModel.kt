@@ -13,6 +13,7 @@ import com.example.popsandbops.data.BlobShapePreset
 import com.example.popsandbops.data.MapPoint
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.data.SoundBlobRepository
+import com.example.popsandbops.data.sanitizeTrimRange
 
 class SoundboardViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SoundBlobRepository(application)
@@ -47,10 +48,28 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun previewBlob(blob: SoundBlob) {
-        player.play(blob) {
+        val didStart = player.play(blob) {
             clearPreview(blob.id)
         }
-        _uiState.value = _uiState.value.copy(playingBlobId = blob.id, selectedBlobId = blob.id)
+        _uiState.value = if (didStart) {
+            _uiState.value.copy(playingBlobId = blob.id, selectedBlobId = blob.id)
+        } else {
+            _uiState.value.copy(
+                playingBlobId = null,
+                selectedBlobId = blob.id,
+                message = "Could not play sound",
+            )
+        }
+    }
+
+    fun showRecordingPermissionDenied() {
+        _uiState.value = _uiState.value.copy(message = "Microphone permission is needed to record")
+    }
+
+    fun clearMessage() {
+        if (_uiState.value.message != null) {
+            _uiState.value = _uiState.value.copy(message = null)
+        }
     }
 
     fun clearPreview(blobId: String) {
@@ -124,22 +143,25 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
 
     fun updatePendingTrim(startMs: Int, endMs: Int) {
         val pending = _uiState.value.pendingRecording ?: return
+        val trim = sanitizeTrimRange(startMs, endMs, pending.safeDurationMs)
         _uiState.value = _uiState.value.copy(
-            pendingRecording = pending.copy(trimStartMs = startMs, trimEndMs = endMs),
+            pendingRecording = pending.copy(trimStartMs = trim.startMs, trimEndMs = trim.endMs),
         )
     }
 
     fun savePendingRecording() {
         val pending = _uiState.value.pendingRecording ?: return
+        val trim = pending.trimRange
         val newBlob = repository.createRecordingBlob(
             audioPath = pending.path,
-            durationMs = pending.durationMs,
+            durationMs = pending.safeDurationMs,
             waveform = pending.waveform,
             existingCount = _uiState.value.blobs.count(),
         ).copy(
             name = pending.name.ifBlank { repository.defaultRecordingName(System.currentTimeMillis()) },
-            trimStartMs = pending.trimStartMs,
-            trimEndMs = pending.trimEndMs,
+            trimStartMs = trim.startMs,
+            trimEndMs = trim.endMs,
+            sourceDurationMs = pending.safeDurationMs,
         )
         val updated = _uiState.value.blobs + newBlob
         repository.saveBlobs(updated)
@@ -178,7 +200,10 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateBlobTrim(blobId: String, startMs: Int, endMs: Int) {
-        updateBlob(blobId) { it.copy(trimStartMs = startMs, trimEndMs = endMs) }
+        updateBlob(blobId) {
+            val trim = sanitizeTrimRange(startMs, endMs, it.safeSourceDurationMs)
+            it.copy(trimStartMs = trim.startMs, trimEndMs = trim.endMs)
+        }
     }
 
     fun updateBlobPosition(blobId: String, position: MapPoint) {

@@ -1,6 +1,7 @@
 package com.example.popsandbops.data
 
 import android.content.Context
+import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -25,7 +26,7 @@ class SoundBlobRepository(context: Context) {
     fun saveBlobs(blobs: List<SoundBlob>) {
         val json = JSONArray()
         blobs.forEach { json.put(it.toJson()) }
-        preferences.edit().putString(KEY_BLOBS, json.toString()).apply()
+        preferences.edit { putString(KEY_BLOBS, json.toString()) }
     }
 
     fun createRecordingFile(): File {
@@ -80,6 +81,14 @@ class SoundBlobRepository(context: Context) {
 
     private fun JSONObject.toSoundBlob(): SoundBlob {
         val blobId = getString("id")
+        val sourceDurationMs = optInt("sourceDurationMs", optInt("trimEndMs", 1000))
+            .coerceAtLeast(MIN_SOUND_DURATION_MS)
+        val trim = sanitizeTrimRange(
+            startMs = optInt("trimStartMs", 0),
+            endMs = optInt("trimEndMs", sourceDurationMs),
+            sourceDurationMs = sourceDurationMs,
+        )
+        val fallbackShape = BlobDefaults.shapeLibrary.first().second
         return SoundBlob(
             id = blobId,
             name = getString("name"),
@@ -88,12 +97,12 @@ class SoundBlobRepository(context: Context) {
             colorArgb = optLong("colorArgb", BlobDefaults.palette.first()),
             shapePreset = enumValueOrDefault(optString("shapePreset"), BlobShapePreset.Splash),
             shapePoints = optJSONArray("shapePoints")?.toFloatList().orEmpty()
-                .ifEmpty { BlobDefaults.shapeLibrary.first().second },
+                .sanitizeShapePoints(fallbackShape),
             waveform = optJSONArray("waveform")?.toFloatList().orEmpty()
-                .ifEmpty { BlobDefaults.generatedWaveform(blobId.hashCode(), 52) },
-            trimStartMs = optInt("trimStartMs", 0),
-            trimEndMs = optInt("trimEndMs", 1000),
-            sourceDurationMs = optInt("sourceDurationMs", optInt("trimEndMs", 1000)),
+                .sanitizeWaveform(blobId.hashCode()),
+            trimStartMs = trim.startMs,
+            trimEndMs = trim.endMs,
+            sourceDurationMs = sourceDurationMs,
             isPinned = optBoolean("isPinned", true),
             audioPath = optString("audioPath").takeIf { it.isNotBlank() && it != "null" },
             builtInTone = optString("builtInTone").takeIf { it.isNotBlank() && it != "null" }
@@ -103,6 +112,17 @@ class SoundBlobRepository(context: Context) {
 
     private fun JSONArray.toFloatList(): List<Float> {
         return List(length()) { index -> optDouble(index, 0.5).toFloat() }
+    }
+
+    private fun List<Float>.sanitizeShapePoints(fallback: List<Float>): List<Float> {
+        val points = take(MAX_SHAPE_POINTS).map { it.coerceIn(MIN_SHAPE_POINT, MAX_SHAPE_POINT) }
+        return points.takeIf { it.size >= MIN_SHAPE_POINTS } ?: fallback
+    }
+
+    private fun List<Float>.sanitizeWaveform(seed: Int): List<Float> {
+        return map { it.coerceIn(MIN_WAVEFORM_POINT, 1f) }
+            .take(MAX_WAVEFORM_POINTS)
+            .ifEmpty { BlobDefaults.generatedWaveform(seed, 52) }
     }
 
     private inline fun <reified T : Enum<T>> enumValueOrNull(name: String): T? {
@@ -116,5 +136,11 @@ class SoundBlobRepository(context: Context) {
     private companion object {
         const val KEY_BLOBS = "blobs"
         const val MAX_RECORDING_MS = 10_000
+        const val MIN_SHAPE_POINTS = 5
+        const val MAX_SHAPE_POINTS = 16
+        const val MIN_SHAPE_POINT = 0.58f
+        const val MAX_SHAPE_POINT = 1.36f
+        const val MIN_WAVEFORM_POINT = 0.08f
+        const val MAX_WAVEFORM_POINTS = 128
     }
 }

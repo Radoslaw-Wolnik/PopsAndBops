@@ -2,6 +2,7 @@ package com.example.popsandbops.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -12,7 +13,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -63,6 +63,34 @@ fun PopsAndBopsApp(
         state.message?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
+        }
+    }
+
+    BackHandler(
+        enabled = state.isRecordPanelOpen ||
+            state.isRecording ||
+            state.pendingRecording != null ||
+            state.editingBlobId != null ||
+            state.selectedBlobId != null ||
+            state.activeSection != SoundboardSection.Map,
+    ) {
+        when {
+            state.isRecordPanelOpen || state.isRecording || state.pendingRecording != null -> {
+                viewModel.cancelRecordingFlow()
+            }
+
+            state.editingBlobId != null -> {
+                viewModel.closeEditor()
+            }
+
+            state.selectedBlobId != null -> {
+                viewModel.selectBlob(null)
+            }
+
+            state.activeSection != SoundboardSection.Map -> {
+                viewModel.selectBlob(null)
+                viewModel.showSection(SoundboardSection.Map)
+            }
         }
     }
 

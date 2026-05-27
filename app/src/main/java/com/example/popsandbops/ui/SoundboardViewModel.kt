@@ -122,7 +122,6 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
 
-        val now = System.currentTimeMillis()
         _uiState.value = _uiState.value.copy(
             isRecording = false,
             recordingElapsedMs = 0,
@@ -131,7 +130,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
                 path = result.file.absolutePath,
                 durationMs = result.durationMs,
                 waveform = result.waveform,
-                name = repository.defaultRecordingName(now),
+                name = "",
             ),
         )
     }
@@ -151,6 +150,11 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
 
     fun savePendingRecording() {
         val pending = _uiState.value.pendingRecording ?: return
+        val name = pending.name.trim()
+        if (name.isBlank()) {
+            _uiState.value = _uiState.value.copy(message = "Name the sound before saving")
+            return
+        }
         val trim = pending.trimRange
         val newBlob = repository.createRecordingBlob(
             audioPath = pending.path,
@@ -158,7 +162,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
             waveform = pending.waveform,
             existingCount = _uiState.value.blobs.count(),
         ).copy(
-            name = pending.name.ifBlank { repository.defaultRecordingName(System.currentTimeMillis()) },
+            name = name,
             trimStartMs = trim.startMs,
             trimEndMs = trim.endMs,
             sourceDurationMs = pending.safeDurationMs,
@@ -235,12 +239,11 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun tickRecording() {
-        val sample = recorder.recordSample()
+        recorder.recordSample()
         val elapsed = recorder.elapsedMs().coerceAtMost(AudioRecorder.MAX_RECORDING_MS)
-        val waveform = (recorder.currentWaveform() + sample).takeLast(64)
         _uiState.value = _uiState.value.copy(
             recordingElapsedMs = elapsed,
-            recordingWaveform = waveform,
+            recordingWaveform = recorder.liveWaveform(),
         )
         if (elapsed >= AudioRecorder.MAX_RECORDING_MS) {
             stopRecording()

@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
 import java.io.File
-import kotlin.math.ceil
 
 data class RecordingResult(
     val file: File,
@@ -50,8 +49,8 @@ class AudioRecorder(private val context: Context) {
         return normalized
     }
 
-    fun currentWaveform(): List<Float> {
-        return samples.toWaveform(64)
+    fun liveWaveform(): List<Float> {
+        return WaveformNormalizer.live(samples, LIVE_WAVEFORM_BARS)
     }
 
     fun stop(): RecordingResult? {
@@ -63,7 +62,7 @@ class AudioRecorder(private val context: Context) {
             RecordingResult(
                 file = file,
                 durationMs = duration,
-                waveform = samples.toWaveform(72),
+                waveform = WaveformNormalizer.summary(samples, SAVED_WAVEFORM_BARS),
             )
         } else {
             file.delete()
@@ -101,22 +100,10 @@ class AudioRecorder(private val context: Context) {
         }
     }
 
-    private fun List<Float>.toWaveform(size: Int): List<Float> {
-        if (isEmpty()) return emptyList()
-        val bucketSize = ceil(count().toFloat() / size).toInt().coerceAtLeast(1)
-        val buckets = chunked(bucketSize).map { bucket -> bucket.maxOrNull() ?: 0f }
-        val loudest = buckets.maxOrNull()?.coerceAtLeast(0.12f) ?: 1f
-        return buckets.map { (it / loudest).coerceIn(0.08f, 1f) }.padTo(size)
-    }
-
-    private fun List<Float>.padTo(size: Int): List<Float> {
-        if (count() >= size) return take(size)
-        val last = lastOrNull() ?: 0.16f
-        return this + List(size - count()) { last }
-    }
-
     companion object {
         const val MAX_RECORDING_MS = 10_000
         const val MIN_RECORDING_MS = 250
+        private const val LIVE_WAVEFORM_BARS = 64
+        private const val SAVED_WAVEFORM_BARS = 72
     }
 }

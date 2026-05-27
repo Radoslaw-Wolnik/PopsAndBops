@@ -131,6 +131,7 @@ fun TrimRecordingSheet(
 ) {
     val durationMs = pendingRecording.safeDurationMs
     val trimRange = pendingRecording.trimRange
+    val canSave = pendingRecording.name.isNotBlank()
 
     Surface(
         modifier = modifier
@@ -166,6 +167,11 @@ fun TrimRecordingSheet(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 label = { Text("Name") },
+                supportingText = {
+                    if (!canSave) {
+                        Text("Required")
+                    }
+                },
             )
 
             WaveformView(
@@ -205,7 +211,10 @@ fun TrimRecordingSheet(
                         Spacer(Modifier.size(8.dp))
                         Text("Discard")
                     }
-                    Button(onClick = onSave) {
+                    Button(
+                        onClick = onSave,
+                        enabled = canSave,
+                    ) {
                         Icon(Icons.Filled.Check, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
                         Text("Save")

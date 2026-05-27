@@ -94,6 +94,7 @@ fun SoundEditorScreen(
     val removePointPress = rememberPressFeedback(pressedScale = 0.90f)
     val sourceDurationMs = blob.safeSourceDurationMs
     val trimRange = blob.trimRange
+    var selectedShapePoint by remember(blob.id) { mutableIntStateOf(-1) }
 
     Column(
         modifier = modifier
@@ -265,32 +266,51 @@ fun SoundEditorScreen(
             ShapeEditorCanvas(
                 points = blob.shapePoints,
                 color = blob.color,
+                selectedPoint = selectedShapePoint,
+                onSelectedPointChange = { selectedShapePoint = it },
                 onPointsChange = onShapePointsChange,
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = {
-                        if (blob.shapePoints.size < 16) {
+                        if (blob.shapePoints.size < MAX_SHAPE_POINTS) {
+                            val insertAt = if (selectedShapePoint in blob.shapePoints.indices) {
+                                selectedShapePoint + 1
+                            } else {
+                                blob.shapePoints.size
+                            }
                             val next = blob.shapePoints.toMutableList()
-                            next.add(1f)
+                            val value = if (selectedShapePoint in blob.shapePoints.indices) {
+                                val following = blob.shapePoints[(selectedShapePoint + 1) % blob.shapePoints.size]
+                                (blob.shapePoints[selectedShapePoint] + following) / 2f
+                            } else {
+                                1f
+                            }
+                            next.add(insertAt, value)
+                            selectedShapePoint = insertAt
                             onShapePointsChange(next)
                         }
                     },
+                    enabled = blob.shapePoints.size < MAX_SHAPE_POINTS,
                     modifier = Modifier.scale(addPointPress.scale),
                     interactionSource = addPointPress.interactionSource,
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Spacer(Modifier.size(8.dp))
-                    Text("Point")
+                    Text(if (selectedShapePoint in blob.shapePoints.indices) "After selected" else "Point")
                 }
                 IconButton(
-                    enabled = blob.shapePoints.size > 5,
-                    onClick = { onShapePointsChange(blob.shapePoints.dropLast(1)) },
+                    enabled = blob.shapePoints.size > MIN_SHAPE_POINTS && selectedShapePoint in blob.shapePoints.indices,
+                    onClick = {
+                        val next = blob.shapePoints.toMutableList().also { it.removeAt(selectedShapePoint) }
+                        selectedShapePoint = selectedShapePoint.coerceAtMost(next.lastIndex)
+                        onShapePointsChange(next)
+                    },
                     modifier = Modifier.scale(removePointPress.scale),
                     interactionSource = removePointPress.interactionSource,
                 ) {
-                    Icon(Icons.Filled.Remove, contentDescription = "Remove point")
+                    Icon(Icons.Filled.Remove, contentDescription = "Remove selected point")
                 }
             }
         }
@@ -362,6 +382,8 @@ private fun EditorSection(
 private fun ShapeEditorCanvas(
     points: List<Float>,
     color: Color,
+    selectedPoint: Int,
+    onSelectedPointChange: (Int) -> Unit,
     onPointsChange: (List<Float>) -> Unit,
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
@@ -379,10 +401,16 @@ private fun ShapeEditorCanvas(
             .pointerInput(points, canvasSize) {
                 detectTapGestures { offset ->
                     val anchors = handleOffsets(Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()), points)
-                    if (nearestHandle(offset, anchors) != null || points.size >= 16) return@detectTapGestures
+                    val handle = nearestHandle(offset, anchors)
+                    if (handle != null) {
+                        onSelectedPointChange(handle)
+                        return@detectTapGestures
+                    }
+                    if (points.size >= MAX_SHAPE_POINTS) return@detectTapGestures
                     val insertAt = insertionIndex(offset, canvasSize, points.size)
                     val next = points.toMutableList()
                     next.add(insertAt, multiplierFor(offset, canvasSize))
+                    onSelectedPointChange(insertAt)
                     onPointsChange(next)
                 }
             }
@@ -391,6 +419,9 @@ private fun ShapeEditorCanvas(
                     onDragStart = { offset ->
                         val anchors = handleOffsets(Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()), points)
                         activePoint = nearestHandle(offset, anchors) ?: -1
+                        if (activePoint >= 0) {
+                            onSelectedPointChange(activePoint)
+                        }
                     },
                     onDragEnd = { activePoint = -1 },
                     onDragCancel = { activePoint = -1 },
@@ -408,6 +439,7 @@ private fun ShapeEditorCanvas(
         val pathSize = Size(size.minDimension * 0.78f, size.minDimension * 0.78f)
         val path = smoothBlobPath(pathSize, safePoints)
         val pathOffset = Offset((size.width - pathSize.width) / 2f, (size.height - pathSize.height) / 2f)
+        val handles = handleOffsets(size, safePoints)
         translate(left = pathOffset.x, top = pathOffset.y) {
             drawPath(path = path, color = color)
             drawPath(
@@ -417,15 +449,15 @@ private fun ShapeEditorCanvas(
             )
         }
 
-        handleOffsets(size, safePoints).forEachIndexed { index, offset ->
+        handles.forEachIndexed { index, offset ->
             drawCircle(
-                color = if (index == activePoint) activeHandleColor else Color.White,
-                radius = 9.dp.toPx(),
+                color = if (index == activePoint || index == selectedPoint) activeHandleColor else Color.White,
+                radius = if (index == selectedPoint) 11.dp.toPx() else 9.dp.toPx(),
                 center = offset,
             )
             drawCircle(
                 color = handleBorderColor,
-                radius = 9.dp.toPx(),
+                radius = if (index == selectedPoint) 11.dp.toPx() else 9.dp.toPx(),
                 center = offset,
                 style = Stroke(width = 2.dp.toPx()),
             )
@@ -466,6 +498,9 @@ private fun insertionIndex(offset: Offset, size: IntSize, count: Int): Int {
     val normalized = (((angle + PI.toFloat() / 2f) + PI.toFloat() * 2f) % (PI.toFloat() * 2f)) / (PI.toFloat() * 2f)
     return (normalized * count).roundToInt().coerceIn(0, count)
 }
+
+private const val MIN_SHAPE_POINTS = 5
+private const val MAX_SHAPE_POINTS = 24
 
 private fun formatMs(ms: Int): String {
     val totalSeconds = (ms / 1_000f).coerceAtLeast(0f)

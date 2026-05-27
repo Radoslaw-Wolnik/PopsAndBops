@@ -246,7 +246,11 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateBlobPosition(blobId: String, position: MapPoint) {
-        updateBlob(blobId) { it.copy(position = BlobMapLayout.snapToArrangeSlot(position)) }
+        val occupiedPositions = _uiState.value.blobs
+            .filter { it.id != blobId && it.isPinned }
+            .map { it.position }
+        val resolvedPosition = BlobMapLayout.resolveOverlaps(position, occupiedPositions)
+        updateBlob(blobId) { it.copy(position = resolvedPosition) }
     }
 
     fun autoArrangePinnedBlobs() {

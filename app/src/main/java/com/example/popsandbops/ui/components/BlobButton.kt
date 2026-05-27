@@ -196,18 +196,30 @@ fun smoothBlobPath(size: Size, points: List<Float>): Path {
     }
 
     val path = Path()
-    val first = anchors.first()
-    val second = anchors[1 % anchors.size]
-    path.moveTo((first.x + second.x) / 2f, (first.y + second.y) / 2f)
+    path.moveTo(anchors.first().x, anchors.first().y)
     anchors.forEachIndexed { index, anchor ->
+        val previous = anchors[(index - 1 + anchors.size) % anchors.size]
         val next = anchors[(index + 1) % anchors.size]
-        path.quadraticTo(
-            anchor.x,
-            anchor.y,
-            (anchor.x + next.x) / 2f,
-            (anchor.y + next.y) / 2f,
+        val afterNext = anchors[(index + 2) % anchors.size]
+        val controlOne = Offset(
+            x = anchor.x + (next.x - previous.x) * CURVE_TENSION,
+            y = anchor.y + (next.y - previous.y) * CURVE_TENSION,
+        )
+        val controlTwo = Offset(
+            x = next.x - (afterNext.x - anchor.x) * CURVE_TENSION,
+            y = next.y - (afterNext.y - anchor.y) * CURVE_TENSION,
+        )
+        path.cubicTo(
+            controlOne.x,
+            controlOne.y,
+            controlTwo.x,
+            controlTwo.y,
+            next.x,
+            next.y,
         )
     }
     path.close()
     return path
 }
+
+private const val CURVE_TENSION = 0.24f

@@ -137,7 +137,7 @@ class SoundBlobRepository(context: Context) {
         const val KEY_BLOBS = "blobs"
         const val MAX_RECORDING_MS = 10_000
         const val MIN_SHAPE_POINTS = 5
-        const val MAX_SHAPE_POINTS = 16
+        const val MAX_SHAPE_POINTS = 24
         const val MIN_SHAPE_POINT = 0.58f
         const val MAX_SHAPE_POINT = 1.36f
         const val MIN_WAVEFORM_POINT = 0.08f

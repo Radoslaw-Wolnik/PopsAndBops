@@ -94,6 +94,18 @@ object BlobDefaults {
         0xFFFF8A3D,
         0xFF5BC0EB,
         0xFFB8F35F,
+        0xFFE84855,
+        0xFF2B59C3,
+        0xFF00A6A6,
+        0xFFFF9F1C,
+        0xFFB565A7,
+        0xFF6A994E,
+        0xFFFF6B6B,
+        0xFF4D96FF,
+        0xFF9B5DE5,
+        0xFF00BBF9,
+        0xFFF15BB5,
+        0xFF90BE6D,
     )
 
     val shapeLibrary = listOf(
@@ -141,6 +153,7 @@ object BlobDefaults {
 object BlobMapLayout {
     const val FirstRingRadius = 180f
     const val RingSpacing = 130f
+    const val MinimumBlobSpacing = 108f
 
     fun suggestedPosition(index: Int): MapPoint {
         val ring = index / 8
@@ -170,6 +183,35 @@ object BlobMapLayout {
             (PI.toFloat() * 2f)
         val slot = (normalized * slots).roundToInt().floorMod(slots)
         return pointOnRing(ring, slot, slots)
+    }
+
+    fun resolveOverlaps(
+        position: MapPoint,
+        occupiedPositions: List<MapPoint>,
+        minimumSpacing: Float = MinimumBlobSpacing,
+    ): MapPoint {
+        if (occupiedPositions.isEmpty()) return position
+        var resolved = position
+        repeat(10) { pass ->
+            occupiedPositions.forEachIndexed { index, occupied ->
+                val dx = resolved.x - occupied.x
+                val dy = resolved.y - occupied.y
+                val distance = hypot(dx, dy)
+                if (distance < minimumSpacing) {
+                    val angle = if (distance == 0f) {
+                        ((index + pass + 1) * 51f) * (PI.toFloat() / 180f)
+                    } else {
+                        atan2(dy, dx)
+                    }
+                    val push = (minimumSpacing - distance).coerceAtMost(minimumSpacing * 0.45f)
+                    resolved = MapPoint(
+                        x = resolved.x + cos(angle) * push,
+                        y = resolved.y + sin(angle) * push,
+                    )
+                }
+            }
+        }
+        return resolved
     }
 
     fun guideRadii(maxDistance: Float): List<Float> {

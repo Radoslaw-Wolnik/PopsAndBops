@@ -12,7 +12,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -31,17 +33,19 @@ fun PopsAndBopsApp(
     val state by viewModel.uiState
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    var isHoldingRecord by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
-        if (isGranted) {
+        if (isGranted && isHoldingRecord) {
             viewModel.startRecording()
-        } else {
+        } else if (!isGranted) {
             viewModel.showRecordingPermissionDenied()
         }
     }
 
     fun startHoldRecording() {
+        isHoldingRecord = true
         val granted = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO,
@@ -54,9 +58,8 @@ fun PopsAndBopsApp(
     }
 
     fun stopHoldRecording() {
-        if (state.isRecording) {
-            viewModel.stopRecording()
-        }
+        isHoldingRecord = false
+        viewModel.stopRecording()
     }
 
     LaunchedEffect(state.message) {
@@ -120,7 +123,6 @@ fun PopsAndBopsApp(
                     SoundboardSection.Map -> SoundMapScreen(
                         blobs = state.pinnedBlobs,
                         playingBlobId = state.playingBlobId,
-                        isRecording = state.isRecording,
                         showBlobNames = state.showBlobNames,
                         modifier = Modifier.fillMaxSize(),
                         onBlobClick = viewModel::previewBlob,

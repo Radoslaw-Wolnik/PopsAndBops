@@ -1,10 +1,5 @@
 package com.example.popsandbops.ui.map
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -72,7 +67,6 @@ import kotlin.math.sin
 fun SoundMapScreen(
     blobs: List<SoundBlob>,
     playingBlobId: String?,
-    isRecording: Boolean,
     showBlobNames: Boolean,
     modifier: Modifier = Modifier,
     onBlobClick: (SoundBlob) -> Unit,
@@ -192,7 +186,6 @@ fun SoundMapScreen(
             val recordScreen = center + pan
             MapRecordBlob(
                 color = recordColor,
-                isRecording = isRecording,
                 modifier = Modifier.offset {
                     val sizePx = with(density) { recordSize.toPx() }
                     IntOffset(
@@ -297,33 +290,20 @@ fun SoundMapScreen(
 @Composable
 private fun MapRecordBlob(
     color: Color,
-    isRecording: Boolean,
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
-    val transition = rememberInfiniteTransition(label = "map record blob")
-    val pulse by transition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(500),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "map record pulse",
-    )
-
     Box(
         modifier = modifier
-            .size(size)
-            .scale(if (isRecording) pulse else 1f),
+            .size(size),
         contentAlignment = Alignment.Center,
     ) {
         BlobButton(
             name = "",
             color = color,
             points = BlobDefaults.shapeLibrary.first().second,
-            isPlaying = isRecording,
+            isPlaying = false,
             size = size,
             showName = false,
             modifier = Modifier.fillMaxSize(),

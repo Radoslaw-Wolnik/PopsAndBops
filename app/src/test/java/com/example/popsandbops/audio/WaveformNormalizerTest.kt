@@ -19,6 +19,16 @@ class WaveformNormalizerTest {
     }
 
     @Test
+    fun liveWaveformAmplifiesQuietSpeechLevels() {
+        val waveform = WaveformNormalizer.live(
+            samples = listOf(0.002f, 0.02f),
+            maxBars = 4,
+        )
+
+        assertTrue(waveform.last() > 0.4f)
+    }
+
+    @Test
     fun summaryWaveformDoesNotPadShortRecordingsWithRepeatedBars() {
         val waveform = WaveformNormalizer.summary(
             samples = listOf(0.1f, 0.2f, 0.3f),

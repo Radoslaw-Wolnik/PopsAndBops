@@ -8,7 +8,7 @@ object WaveformNormalizer {
         if (samples.isEmpty() || maxBars <= 0) return emptyList()
         return samples
             .takeLast(maxBars)
-            .map(::displaySample)
+            .map { sample -> displaySample(sample * LIVE_GAIN) }
     }
 
     fun summary(samples: List<Float>, maxBars: Int): List<Float> {
@@ -30,5 +30,6 @@ object WaveformNormalizer {
         return sqrt(sample.coerceIn(0f, 1f)).coerceIn(MIN_VISIBLE_BAR, 1f)
     }
 
-    private const val MIN_VISIBLE_BAR = 0.06f
+    private const val LIVE_GAIN = 12f
+    private const val MIN_VISIBLE_BAR = 0.035f
 }

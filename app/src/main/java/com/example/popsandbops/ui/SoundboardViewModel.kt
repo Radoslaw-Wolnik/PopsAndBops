@@ -78,6 +78,36 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun openRecordPanel() {
+        _uiState.value = _uiState.value.copy(
+            isRecordPanelOpen = true,
+            activeSection = SoundboardSection.Map,
+        )
+    }
+
+    fun closeRecordPanel() {
+        if (_uiState.value.isRecording) return
+        _uiState.value = _uiState.value.copy(isRecordPanelOpen = false)
+    }
+
+    fun cancelRecordingFlow() {
+        recordingTicker?.let(handler::removeCallbacks)
+        recordingTicker = null
+        recorder.cancel()
+        _uiState.value.pendingRecording?.path?.let { java.io.File(it).delete() }
+        _uiState.value = _uiState.value.copy(
+            isRecording = false,
+            recordingElapsedMs = 0,
+            recordingWaveform = emptyList(),
+            pendingRecording = null,
+            isRecordPanelOpen = false,
+        )
+    }
+
+    fun setBlobNamesVisible(isVisible: Boolean) {
+        _uiState.value = _uiState.value.copy(showBlobNames = isVisible)
+    }
+
     fun upsertBlob(blob: SoundBlob) {
         val current = _uiState.value.blobs
         val updated = if (current.any { it.id == blob.id }) {
@@ -89,6 +119,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun startRecording() {
+        if (_uiState.value.isRecording) return
         player.stop()
         val outputFile = repository.createRecordingFile()
         runCatching {
@@ -100,6 +131,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
                 recordingWaveform = emptyList(),
                 pendingRecording = null,
                 playingBlobId = null,
+                isRecordPanelOpen = true,
                 activeSection = SoundboardSection.Map,
             )
             tickRecording()
@@ -109,6 +141,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun stopRecording() {
+        if (!_uiState.value.isRecording) return
         recordingTicker?.let(handler::removeCallbacks)
         recordingTicker = null
         val result = recorder.stop()
@@ -132,6 +165,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
                 waveform = result.waveform,
                 name = "",
             ),
+            isRecordPanelOpen = true,
         )
     }
 
@@ -173,6 +207,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
             blobs = updated,
             pendingRecording = null,
             selectedBlobId = newBlob.id,
+            isRecordPanelOpen = false,
             activeSection = SoundboardSection.Map,
         )
     }
@@ -180,7 +215,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     fun discardPendingRecording() {
         val pending = _uiState.value.pendingRecording ?: return
         java.io.File(pending.path).delete()
-        _uiState.value = _uiState.value.copy(pendingRecording = null)
+        _uiState.value = _uiState.value.copy(pendingRecording = null, isRecordPanelOpen = false)
     }
 
     fun updateBlobName(blobId: String, name: String) {

@@ -1,5 +1,10 @@
 package com.example.popsandbops.ui.map
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -24,11 +29,10 @@ import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.OpenWith
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -52,6 +56,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.example.popsandbops.data.BlobDefaults
 import com.example.popsandbops.data.BlobMapLayout
 import com.example.popsandbops.data.MapPoint
 import com.example.popsandbops.data.SoundBlob
@@ -68,12 +73,14 @@ fun SoundMapScreen(
     blobs: List<SoundBlob>,
     playingBlobId: String?,
     isRecording: Boolean,
+    showBlobNames: Boolean,
     modifier: Modifier = Modifier,
     onBlobClick: (SoundBlob) -> Unit,
     onLibraryClick: () -> Unit,
     onBlobMoved: (SoundBlob, MapPoint) -> Unit,
     onAutoArrange: () -> Unit,
     onRecordClick: () -> Unit,
+    onBlobNamesVisibleChange: (Boolean) -> Unit,
 ) {
     var pan by remember { mutableStateOf(Offset.Zero) }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -84,7 +91,7 @@ fun SoundMapScreen(
     val background = MaterialTheme.colorScheme.background
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.76f)
     val ringColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-    val recordPress = rememberPressFeedback(pressedScale = 0.90f)
+    val recordColor = MaterialTheme.colorScheme.primary
 
     BoxWithConstraints(
         modifier = modifier
@@ -133,6 +140,7 @@ fun SoundMapScreen(
                 points = blob.shapePoints,
                 isPlaying = playingBlobId == blob.id || isDragging,
                 size = scaledSize,
+                showName = showBlobNames,
                 modifier = Modifier
                     .offset {
                         val sizePx = with(density) { scaledSize.toPx() }
@@ -179,6 +187,24 @@ fun SoundMapScreen(
             )
         }
 
+        if (!isArranging) {
+            val recordSize = with(density) { (72.dp.toPx() * zoom.coerceIn(0.86f, 1.18f)).toDp() }
+            val recordScreen = center + pan
+            MapRecordBlob(
+                color = recordColor,
+                isRecording = isRecording,
+                modifier = Modifier.offset {
+                    val sizePx = with(density) { recordSize.toPx() }
+                    IntOffset(
+                        x = (recordScreen.x - sizePx / 2f).roundToInt(),
+                        y = (recordScreen.y - sizePx / 2f).roundToInt(),
+                    )
+                },
+                size = recordSize,
+                onClick = onRecordClick,
+            )
+        }
+
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -221,6 +247,12 @@ fun SoundMapScreen(
                     contentDescription = "Arrange sounds",
                     onClick = { isArranging = true },
                 )
+                MapActionButton(
+                    label = if (showBlobNames) "Hide names" else "Names",
+                    imageVector = if (showBlobNames) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                    contentDescription = if (showBlobNames) "Hide sound names" else "Show sound names",
+                    onClick = { onBlobNamesVisibleChange(!showBlobNames) },
+                )
             }
             MapToolButton(icon = { Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom in") }) {
                 zoom = (zoom + 0.14f).coerceAtMost(MAX_ZOOM)
@@ -259,28 +291,50 @@ fun SoundMapScreen(
                 )
             }
         }
+    }
+}
 
-        if (!isArranging) {
-            FloatingActionButton(
-                onClick = onRecordClick,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(86.dp)
-                    .scale(recordPress.scale),
-                shape = CircleShape,
-                containerColor = if (isRecording) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
-                interactionSource = recordPress.interactionSource,
-            ) {
-                Icon(
-                    imageVector = if (isRecording) Icons.Filled.Stop else Icons.Filled.FiberManualRecord,
-                    contentDescription = if (isRecording) "Stop recording" else "Record sound",
-                    modifier = Modifier.size(40.dp),
-                )
-            }
-        }
+@Composable
+private fun MapRecordBlob(
+    color: Color,
+    isRecording: Boolean,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit,
+) {
+    val transition = rememberInfiniteTransition(label = "map record blob")
+    val pulse by transition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(500),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "map record pulse",
+    )
 
+    Box(
+        modifier = modifier
+            .size(size)
+            .scale(if (isRecording) pulse else 1f),
+        contentAlignment = Alignment.Center,
+    ) {
+        BlobButton(
+            name = "",
+            color = color,
+            points = BlobDefaults.shapeLibrary.first().second,
+            isPlaying = isRecording,
+            size = size,
+            showName = false,
+            modifier = Modifier.fillMaxSize(),
+            onClick = onClick,
+        )
+        Icon(
+            imageVector = Icons.Filled.FiberManualRecord,
+            contentDescription = "Open recorder",
+            tint = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier.size(size * 0.38f),
+        )
     }
 }
 

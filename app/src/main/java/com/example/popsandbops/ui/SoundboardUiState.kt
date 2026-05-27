@@ -20,6 +20,8 @@ data class SoundboardUiState(
     val recordingElapsedMs: Int = 0,
     val recordingWaveform: List<Float> = emptyList(),
     val pendingRecording: PendingRecording? = null,
+    val isRecordPanelOpen: Boolean = false,
+    val showBlobNames: Boolean = true,
     val message: String? = null,
 ) {
     val pinnedBlobs: List<SoundBlob>

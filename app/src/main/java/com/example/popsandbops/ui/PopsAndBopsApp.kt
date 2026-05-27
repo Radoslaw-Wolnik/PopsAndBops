@@ -22,8 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.popsandbops.ui.editor.SoundEditorScreen
 import com.example.popsandbops.ui.library.SoundLibraryScreen
 import com.example.popsandbops.ui.map.SoundMapScreen
-import com.example.popsandbops.ui.recording.RecordingBlobOverlay
-import com.example.popsandbops.ui.recording.TrimRecordingSheet
+import com.example.popsandbops.ui.recording.RecordingFlowScreen
 
 @Composable
 fun PopsAndBopsApp(
@@ -42,11 +41,7 @@ fun PopsAndBopsApp(
         }
     }
 
-    fun requestOrRecord() {
-        if (state.isRecording) {
-            viewModel.stopRecording()
-            return
-        }
+    fun startHoldRecording() {
         val granted = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.RECORD_AUDIO,
@@ -55,6 +50,12 @@ fun PopsAndBopsApp(
             viewModel.startRecording()
         } else {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun stopHoldRecording() {
+        if (state.isRecording) {
+            viewModel.stopRecording()
         }
     }
 
@@ -92,6 +93,7 @@ fun PopsAndBopsApp(
                         blobs = state.pinnedBlobs,
                         playingBlobId = state.playingBlobId,
                         isRecording = state.isRecording,
+                        showBlobNames = state.showBlobNames,
                         modifier = Modifier.fillMaxSize(),
                         onBlobClick = viewModel::previewBlob,
                         onLibraryClick = {
@@ -100,7 +102,8 @@ fun PopsAndBopsApp(
                         },
                         onBlobMoved = { blob, position -> viewModel.updateBlobPosition(blob.id, position) },
                         onAutoArrange = viewModel::autoArrangePinnedBlobs,
-                        onRecordClick = ::requestOrRecord,
+                        onRecordClick = viewModel::openRecordPanel,
+                        onBlobNamesVisibleChange = viewModel::setBlobNamesVisible,
                     )
 
                     SoundboardSection.Library -> SoundLibraryScreen(
@@ -120,19 +123,16 @@ fun PopsAndBopsApp(
                 }
             }
 
-            if (state.isRecording) {
-                RecordingBlobOverlay(
+            if (state.isRecordPanelOpen || state.isRecording || state.pendingRecording != null) {
+                RecordingFlowScreen(
+                    isRecording = state.isRecording,
                     elapsedMs = state.recordingElapsedMs,
                     waveform = state.recordingWaveform,
-                    modifier = Modifier.align(Alignment.Center),
-                    onStop = viewModel::stopRecording,
-                )
-            }
-
-            state.pendingRecording?.let { pending ->
-                TrimRecordingSheet(
-                    pendingRecording = pending,
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    pendingRecording = state.pendingRecording,
+                    modifier = Modifier.fillMaxSize(),
+                    onClose = viewModel::cancelRecordingFlow,
+                    onHoldStart = ::startHoldRecording,
+                    onHoldEnd = ::stopHoldRecording,
                     onNameChange = viewModel::updatePendingName,
                     onTrimChange = viewModel::updatePendingTrim,
                     onSave = viewModel::savePendingRecording,

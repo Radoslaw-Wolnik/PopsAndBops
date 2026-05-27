@@ -42,6 +42,7 @@ fun BlobButton(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
     size: Dp = 92.dp,
+    showName: Boolean = true,
     onClick: () -> Unit,
 ) {
     val press = rememberPressFeedback(pressedScale = 0.88f)
@@ -111,16 +112,18 @@ fun BlobButton(
                 )
             }
         }
-        Text(
-            text = name,
-            modifier = Modifier.padding(horizontal = 14.dp),
-            color = MaterialTheme.colorScheme.onBackground,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (showName) {
+            Text(
+                text = name,
+                modifier = Modifier.padding(horizontal = 14.dp),
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 

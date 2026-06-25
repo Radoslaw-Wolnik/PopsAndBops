@@ -8,7 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,12 +65,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.BlobDefaults
+import com.example.popsandbops.data.BlobShapePreset
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.data.sanitizeTrimRange
 import com.example.popsandbops.ui.components.BlobPreview
 import com.example.popsandbops.ui.components.rememberPressFeedback
 import com.example.popsandbops.ui.components.WaveformView
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.hypot
@@ -241,41 +242,14 @@ fun SoundEditorScreen(
         }
 
         EditorSection(title = "Shape") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                BlobDefaults.shapeLibrary.forEach { (preset, points) ->
-                    val press = rememberPressFeedback(pressedScale = 0.92f)
-                    Surface(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .scale(press.scale)
-                            .clickable(
-                                interactionSource = press.interactionSource,
-                                indication = LocalIndication.current,
-                            ) {
-                                draft = draft.copy(shapePreset = preset, shapePoints = points)
-                                selectedShapePoint = -1
-                            },
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        tonalElevation = if (press.isPressed) 5.dp else 0.dp,
-                        border = BorderStroke(
-                            width = if (draft.shapePreset == preset) 3.dp else 1.dp,
-                            color = if (draft.shapePreset == preset) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                        ),
-                    ) {
-                        BlobPreview(
-                            color = draft.color,
-                            points = points,
-                            modifier = Modifier.padding(8.dp),
-                        )
-                    }
-                }
-            }
+            ShapePresetGrid(
+                selectedPoints = draft.shapePoints,
+                color = draft.color,
+                onPresetSelected = { preset, points ->
+                    draft = draft.copy(shapePreset = preset, shapePoints = points)
+                    selectedShapePoint = -1
+                },
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -366,6 +340,60 @@ private fun EditorSection(
                 fontWeight = FontWeight.Black,
             )
             content()
+        }
+    }
+}
+
+@Composable
+private fun ShapePresetGrid(
+    selectedPoints: List<Float>,
+    color: Color,
+    onPresetSelected: (BlobShapePreset, List<Float>) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        BlobDefaults.shapeLibrary.chunked(5).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                row.forEach { (preset, points) ->
+                    val press = rememberPressFeedback(pressedScale = 0.92f)
+                    val isSelected = shapePointsMatch(selectedPoints, points)
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(64.dp)
+                            .scale(press.scale)
+                            .clickable(
+                                interactionSource = press.interactionSource,
+                                indication = LocalIndication.current,
+                            ) { onPresetSelected(preset, points) },
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        tonalElevation = if (press.isPressed) 5.dp else 0.dp,
+                        border = BorderStroke(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.outline
+                            },
+                        ),
+                    ) {
+                        BlobPreview(
+                            color = color,
+                            points = points,
+                            modifier = Modifier.padding(7.dp),
+                        )
+                    }
+                }
+                repeat(5 - row.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }
@@ -978,6 +1006,10 @@ private fun colorHex(colorArgb: Long): String {
     val green = colorComponent(colorArgb, 8).roundToInt()
     val blue = colorComponent(colorArgb, 0).roundToInt()
     return "#%02X%02X%02X".format(red, green, blue)
+}
+
+private fun shapePointsMatch(left: List<Float>, right: List<Float>): Boolean {
+    return left.size == right.size && left.zip(right).all { (a, b) -> abs(a - b) < 0.001f }
 }
 
 private const val MIN_SHAPE_POINTS = 5

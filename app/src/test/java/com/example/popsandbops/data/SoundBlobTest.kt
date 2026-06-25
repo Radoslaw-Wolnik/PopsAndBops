@@ -64,6 +64,23 @@ class SoundBlobTest {
         assertTrue(blobs.all { it.durationMs >= MIN_SOUND_DURATION_MS })
     }
 
+    @Test
+    fun shapeLibraryContainsOneHundredVariedOrganicPresets() {
+        val shapes = BlobDefaults.shapeLibrary
+
+        assertEquals(100, shapes.size)
+        assertEquals(
+            BlobShapePreset.entries.toSet(),
+            shapes.map { it.first }.toSet(),
+        )
+        assertEquals(
+            shapes.size,
+            shapes.map { (_, points) -> points.joinToString(separator = ",") { "%.3f".format(it) } }.toSet().size,
+        )
+        assertTrue(shapes.all { (_, points) -> points.size in 10..20 })
+        assertTrue(shapes.all { (_, points) -> points.all { it in 0.62f..1.34f } })
+    }
+
     private fun soundBlob(
         trimStartMs: Int = 0,
         trimEndMs: Int = 1_000,

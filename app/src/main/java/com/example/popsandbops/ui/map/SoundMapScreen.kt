@@ -3,7 +3,6 @@ package com.example.popsandbops.ui.map
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -142,15 +141,7 @@ fun SoundMapScreen(
                     candidatePosition
                 }
                 val worldPosition = Offset(resolvedPosition.x, resolvedPosition.y)
-                val targetScreen = center + pan + Offset(worldPosition.x * worldToPx, worldPosition.y * worldToPx)
-                val animatedScreen by animateOffsetAsState(
-                    targetValue = targetScreen,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                    label = "blob map position",
-                )
+                val screenPosition = center + pan + Offset(worldPosition.x * worldToPx, worldPosition.y * worldToPx)
                 BlobButton(
                     name = blob.name,
                     color = blob.color,
@@ -164,8 +155,8 @@ fun SoundMapScreen(
                         .offset {
                             val sizePx = with(density) { scaledSize.toPx() }
                             IntOffset(
-                                x = (animatedScreen.x - sizePx / 2f).roundToInt(),
-                                y = (animatedScreen.y - sizePx / 2f).roundToInt(),
+                                x = (screenPosition.x - sizePx / 2f).roundToInt(),
+                                y = (screenPosition.y - sizePx / 2f).roundToInt(),
                             )
                         }
                         .then(

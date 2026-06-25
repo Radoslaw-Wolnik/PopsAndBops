@@ -237,7 +237,19 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun toggleBlobPinned(blobId: String, isPinned: Boolean) {
-        updateBlob(blobId) { it.copy(isPinned = isPinned) }
+        val occupiedPositions = _uiState.value.blobs
+            .filter { it.id != blobId && it.isPinned }
+            .map { it.position }
+        updateBlob(blobId) {
+            it.copy(
+                isPinned = isPinned,
+                position = if (isPinned) {
+                    BlobMapLayout.resolveOverlaps(it.position, occupiedPositions)
+                } else {
+                    it.position
+                },
+            )
+        }
     }
 
     fun updateBlobColor(blobId: String, colorArgb: Long) {
@@ -329,7 +341,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun List<SoundBlob>.needMoreSpace(): Boolean {
-        val minimumSpacing = BlobMapLayout.MinimumBlobSpacing * 0.92f
+        val minimumSpacing = BlobMapLayout.MinimumBlobSpacing
         forEachIndexed { index, blob ->
             if (hypot(blob.position.x, blob.position.y) < minimumSpacing) {
                 return true

@@ -9,6 +9,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 const val MIN_SOUND_DURATION_MS = 250
 const val DEFAULT_BLOB_CURVE_TENSION = 0.18f
@@ -268,9 +269,9 @@ const val MAX_BLOB_NODE_COORDINATE = 1.35f
 
 object BlobMapLayout {
     const val BlobButtonDiameter = 108f
-    const val BlobCollisionMargin = 4f
+    const val BlobCollisionMargin = 12f
     const val MinimumBlobSpacing = BlobButtonDiameter + BlobCollisionMargin
-    const val FirstRingRadius = 148f
+    const val FirstRingRadius = 158f
     const val RingSpacing = MinimumBlobSpacing
 
     fun suggestedPosition(index: Int): MapPoint {
@@ -309,32 +310,35 @@ object BlobMapLayout {
         return pointOnRing(ring, slot, slots)
     }
 
+    fun edgeGapBetween(first: MapPoint, second: MapPoint): Float {
+        return distanceBetween(first, second) - BlobButtonDiameter
+    }
+
+    fun hasClearEdges(
+        position: MapPoint,
+        occupiedPositions: List<MapPoint>,
+        minimumEdgeMargin: Float = BlobCollisionMargin,
+    ): Boolean {
+        val minimumSpacing = BlobButtonDiameter + minimumEdgeMargin
+        return occupiedPositions.all { occupied ->
+            distanceBetween(position, occupied) >= minimumSpacing - FLOAT_TOLERANCE
+        }
+    }
+
     fun resolveOverlaps(
         position: MapPoint,
         occupiedPositions: List<MapPoint>,
         minimumSpacing: Float = MinimumBlobSpacing,
     ): MapPoint {
-        if (occupiedPositions.isEmpty()) return position
-        var resolved = position
-        repeat(18) { pass ->
-            occupiedPositions.forEachIndexed { index, occupied ->
-                val dx = resolved.x - occupied.x
-                val dy = resolved.y - occupied.y
-                val distance = hypot(dx, dy)
-                if (distance < minimumSpacing) {
-                    val angle = if (distance == 0f) {
-                        ((index + pass + 1) * 51f) * (PI.toFloat() / 180f)
-                    } else {
-                        atan2(dy, dx)
-                    }
-                    resolved = MapPoint(
-                        x = occupied.x + cos(angle) * minimumSpacing,
-                        y = occupied.y + sin(angle) * minimumSpacing,
-                    )
-                }
-            }
+        if (occupiedPositions.isEmpty() || position.hasMinimumSpacingFrom(occupiedPositions, minimumSpacing)) {
+            return position
         }
-        return resolved
+
+        return overlapResolutionCandidates(position, occupiedPositions, minimumSpacing)
+            .asSequence()
+            .filter { it.hasMinimumSpacingFrom(occupiedPositions, minimumSpacing) }
+            .minByOrNull { it.distanceSquaredTo(position) }
+            ?: searchNearestClearPosition(position, occupiedPositions, minimumSpacing)
     }
 
     fun guideRadii(maxDistance: Float): List<Float> {
@@ -370,4 +374,118 @@ object BlobMapLayout {
     }
 
     private fun Int.floorMod(modulus: Int): Int = ((this % modulus) + modulus) % modulus
+
+    private fun overlapResolutionCandidates(
+        position: MapPoint,
+        occupiedPositions: List<MapPoint>,
+        minimumSpacing: Float,
+    ): List<MapPoint> {
+        val candidates = mutableListOf<MapPoint>()
+        occupiedPositions.forEachIndexed { index, occupied ->
+            val angle = occupied.angleTo(position) ?: fallbackAngle(index)
+            candidates += occupied.pointAt(angle, minimumSpacing)
+            candidates += occupied.pointAt(angle - ANGLE_NUDGE, minimumSpacing)
+            candidates += occupied.pointAt(angle + ANGLE_NUDGE, minimumSpacing)
+        }
+        occupiedPositions.forEachIndexed { firstIndex, first ->
+            occupiedPositions.drop(firstIndex + 1).forEach { second ->
+                candidates += circleIntersections(first, second, minimumSpacing)
+            }
+        }
+        return candidates
+    }
+
+    private fun circleIntersections(
+        first: MapPoint,
+        second: MapPoint,
+        radius: Float,
+    ): List<MapPoint> {
+        val dx = second.x - first.x
+        val dy = second.y - first.y
+        val distance = hypot(dx, dy)
+        if (distance <= FLOAT_TOLERANCE || distance > radius * 2f + FLOAT_TOLERANCE) {
+            return emptyList()
+        }
+
+        val midpoint = MapPoint(
+            x = (first.x + second.x) / 2f,
+            y = (first.y + second.y) / 2f,
+        )
+        val halfDistance = distance / 2f
+        val height = sqrt((radius * radius - halfDistance * halfDistance).coerceAtLeast(0f))
+        val unitX = dx / distance
+        val unitY = dy / distance
+        val perpendicularX = -unitY * height
+        val perpendicularY = unitX * height
+
+        return listOf(
+            MapPoint(midpoint.x + perpendicularX, midpoint.y + perpendicularY),
+            MapPoint(midpoint.x - perpendicularX, midpoint.y - perpendicularY),
+        )
+    }
+
+    private fun searchNearestClearPosition(
+        position: MapPoint,
+        occupiedPositions: List<MapPoint>,
+        minimumSpacing: Float,
+    ): MapPoint {
+        val radiusStep = (BlobCollisionMargin / 2f).coerceAtLeast(6f)
+        val maxRadius = minimumSpacing * (occupiedPositions.size + 2)
+        var radius = radiusStep
+        while (radius <= maxRadius) {
+            val candidateCount = max(16, (PI.toFloat() * 2f * radius / radiusStep).roundToInt())
+                .coerceAtMost(144)
+            val nearest = (0 until candidateCount)
+                .map { slot ->
+                    val angle = slot / candidateCount.toFloat() * PI.toFloat() * 2f
+                    position.pointAt(angle, radius)
+                }
+                .filter { it.hasMinimumSpacingFrom(occupiedPositions, minimumSpacing) }
+                .minByOrNull { it.distanceSquaredTo(position) }
+            if (nearest != null) return nearest
+            radius += radiusStep
+        }
+
+        return position.pointAt(fallbackAngle(occupiedPositions.size), maxRadius + minimumSpacing)
+    }
+
+    private fun MapPoint.hasMinimumSpacingFrom(
+        occupiedPositions: List<MapPoint>,
+        minimumSpacing: Float,
+    ): Boolean {
+        return occupiedPositions.all { occupied ->
+            distanceBetween(this, occupied) >= minimumSpacing - FLOAT_TOLERANCE
+        }
+    }
+
+    private fun MapPoint.angleTo(other: MapPoint): Float? {
+        val dx = other.x - x
+        val dy = other.y - y
+        if (hypot(dx, dy) <= FLOAT_TOLERANCE) return null
+        return atan2(dy, dx)
+    }
+
+    private fun MapPoint.pointAt(angle: Float, radius: Float): MapPoint {
+        return MapPoint(
+            x = x + cos(angle) * radius,
+            y = y + sin(angle) * radius,
+        )
+    }
+
+    private fun MapPoint.distanceSquaredTo(other: MapPoint): Float {
+        val dx = x - other.x
+        val dy = y - other.y
+        return dx * dx + dy * dy
+    }
+
+    private fun distanceBetween(first: MapPoint, second: MapPoint): Float {
+        return hypot(first.x - second.x, first.y - second.y)
+    }
+
+    private fun fallbackAngle(index: Int): Float {
+        return ((index + 1) * 51f) * (PI.toFloat() / 180f)
+    }
+
+    private val ANGLE_NUDGE = 12f * (PI.toFloat() / 180f)
+    private const val FLOAT_TOLERANCE = 0.001f
 }

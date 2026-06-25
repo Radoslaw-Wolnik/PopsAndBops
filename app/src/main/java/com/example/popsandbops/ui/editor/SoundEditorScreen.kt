@@ -651,6 +651,7 @@ private fun ShapeVectorEditorScreen(
     val donePress = rememberPressFeedback(pressedScale = 0.94f)
     val addPointPress = rememberPressFeedback(pressedScale = 0.94f)
     val removePointPress = rememberPressFeedback(pressedScale = 0.94f)
+    var mirrorCurveHandles by remember { mutableStateOf(true) }
 
     Column(
         modifier = modifier
@@ -706,6 +707,7 @@ private fun ShapeVectorEditorScreen(
                 curveTension = curveTension,
                 color = color,
                 selectedPoint = selectedPoint,
+                mirrorCurveHandles = mirrorCurveHandles,
                 modifier = Modifier.fillMaxSize(),
                 onSelectedPointChange = onSelectedPointChange,
                 onNodesChange = onNodesChange,
@@ -716,8 +718,15 @@ private fun ShapeVectorEditorScreen(
             nodes = nodes,
             selectedPoint = selectedPoint,
             curveTension = curveTension,
+            mirrorCurveHandles = mirrorCurveHandles,
             onNodesChange = onNodesChange,
             onCurveTensionChange = onCurveTensionChange,
+            onMirrorCurveHandlesChange = { enabled ->
+                mirrorCurveHandles = enabled
+                if (enabled) {
+                    onNodesChange(mirrorSelectedHandles(nodes, selectedPoint))
+                }
+            },
         )
 
         Row(
@@ -766,6 +775,7 @@ private fun ShapeVectorCanvas(
     curveTension: Float,
     color: Color,
     selectedPoint: Int,
+    mirrorCurveHandles: Boolean,
     modifier: Modifier = Modifier,
     onSelectedPointChange: (Int) -> Unit,
     onNodesChange: (List<BlobShapeNode>) -> Unit,
@@ -774,6 +784,7 @@ private fun ShapeVectorCanvas(
     var activeTarget by remember { mutableStateOf<ShapeDragTarget?>(null) }
     val latestNodes by rememberUpdatedState(nodes)
     val latestSelectedPoint by rememberUpdatedState(selectedPoint)
+    val latestMirrorCurveHandles by rememberUpdatedState(mirrorCurveHandles)
     val activeHandleColor = MaterialTheme.colorScheme.primary
     val handleBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
     val guideColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
@@ -824,6 +835,7 @@ private fun ShapeVectorCanvas(
                                 target = target,
                                 position = change.position,
                                 size = canvasSize,
+                                mirrorCurveHandles = latestMirrorCurveHandles,
                             ),
                         )
                     }
@@ -907,8 +919,10 @@ private fun PointCurveControl(
     nodes: List<BlobShapeNode>,
     selectedPoint: Int,
     curveTension: Float,
+    mirrorCurveHandles: Boolean,
     onNodesChange: (List<BlobShapeNode>) -> Unit,
     onCurveTensionChange: (Float) -> Unit,
+    onMirrorCurveHandlesChange: (Boolean) -> Unit,
 ) {
     val hasSelection = selectedPoint in nodes.indices
     val curveAmount = if (hasSelection) {
@@ -947,13 +961,42 @@ private fun PointCurveControl(
                 value = curveAmount.coerceIn(0f, MAX_SELECTED_HANDLE_DISTANCE),
                 onValueChange = { amount ->
                     if (hasSelection) {
-                        onNodesChange(scaleSelectedHandles(nodes, selectedPoint, amount))
+                        onNodesChange(
+                            scaleSelectedHandles(
+                                nodes = nodes,
+                                selectedPoint = selectedPoint,
+                                distance = amount,
+                                mirrorCurveHandles = mirrorCurveHandles,
+                            ),
+                        )
                     } else {
                         onCurveTensionChange(amount.coerceIn(MIN_CURVE_TENSION, MAX_CURVE_TENSION))
                     }
                 },
                 valueRange = 0f..MAX_SELECTED_HANDLE_DISTANCE,
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Mirror handles",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = if (mirrorCurveHandles) "Symmetric" else "Free",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                    )
+                }
+                Switch(
+                    checked = mirrorCurveHandles,
+                    onCheckedChange = onMirrorCurveHandlesChange,
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1058,6 +1101,7 @@ private fun moveShapeTarget(
     target: ShapeDragTarget,
     position: Offset,
     size: IntSize,
+    mirrorCurveHandles: Boolean,
 ): List<BlobShapeNode> {
     if (target.index !in nodes.indices) return nodes
     val next = nodes.toMutableList()
@@ -1074,8 +1118,23 @@ private fun moveShapeTarget(
             )
         }
 
-        ShapeHandle.InHandle -> node.copy(inHandle = point)
-        ShapeHandle.OutHandle -> node.copy(outHandle = point)
+        ShapeHandle.InHandle -> if (mirrorCurveHandles) {
+            node.copy(
+                inHandle = point,
+                outHandle = mirroredHandle(node.anchor, point),
+            )
+        } else {
+            node.copy(inHandle = point)
+        }
+
+        ShapeHandle.OutHandle -> if (mirrorCurveHandles) {
+            node.copy(
+                inHandle = mirroredHandle(node.anchor, point),
+                outHandle = point,
+            )
+        } else {
+            node.copy(outHandle = point)
+        }
     }
     return next
 }
@@ -1188,17 +1247,64 @@ private fun scaleSelectedHandles(
     nodes: List<BlobShapeNode>,
     selectedPoint: Int,
     distance: Float,
+    mirrorCurveHandles: Boolean,
 ): List<BlobShapeNode> {
     if (selectedPoint !in nodes.indices) return nodes
     val auto = autoHandleNodes(nodes.map { it.anchor }, DEFAULT_BLOB_CURVE_TENSION)
     val next = nodes.toMutableList()
     val node = next[selectedPoint]
     val fallback = auto[selectedPoint]
+    if (mirrorCurveHandles) {
+        val incoming = hypot(node.inHandle.x - node.anchor.x, node.inHandle.y - node.anchor.y)
+        val outgoing = hypot(node.outHandle.x - node.anchor.x, node.outHandle.y - node.anchor.y)
+        val useIncoming = incoming > outgoing
+        val scaledSourceHandle = if (useIncoming) {
+            scaledHandle(node.anchor, node.inHandle, fallback.inHandle, distance)
+        } else {
+            scaledHandle(node.anchor, node.outHandle, fallback.outHandle, distance)
+        }
+        next[selectedPoint] = if (useIncoming) {
+            node.copy(
+                inHandle = scaledSourceHandle,
+                outHandle = mirroredHandle(node.anchor, scaledSourceHandle),
+            )
+        } else {
+            node.copy(
+                inHandle = mirroredHandle(node.anchor, scaledSourceHandle),
+                outHandle = scaledSourceHandle,
+            )
+        }
+        return next
+    }
     next[selectedPoint] = node.copy(
         inHandle = scaledHandle(node.anchor, node.inHandle, fallback.inHandle, distance),
         outHandle = scaledHandle(node.anchor, node.outHandle, fallback.outHandle, distance),
     )
     return next
+}
+
+private fun mirrorSelectedHandles(
+    nodes: List<BlobShapeNode>,
+    selectedPoint: Int,
+): List<BlobShapeNode> {
+    if (selectedPoint !in nodes.indices) return nodes
+    val next = nodes.toMutableList()
+    val node = next[selectedPoint]
+    val incoming = hypot(node.inHandle.x - node.anchor.x, node.inHandle.y - node.anchor.y)
+    val outgoing = hypot(node.outHandle.x - node.anchor.x, node.outHandle.y - node.anchor.y)
+    next[selectedPoint] = if (incoming > outgoing) {
+        node.copy(outHandle = mirroredHandle(node.anchor, node.inHandle))
+    } else {
+        node.copy(inHandle = mirroredHandle(node.anchor, node.outHandle))
+    }
+    return next
+}
+
+private fun mirroredHandle(anchor: MapPoint, handle: MapPoint): MapPoint {
+    return MapPoint(
+        x = anchor.x * 2f - handle.x,
+        y = anchor.y * 2f - handle.y,
+    ).coerceShapePoint()
 }
 
 private fun selectedHandleDistance(node: BlobShapeNode): Float {

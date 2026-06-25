@@ -1,5 +1,6 @@
 package com.example.popsandbops.ui.editor
 
+import android.graphics.Color as AndroidColor
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -46,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,16 +67,28 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.BlobDefaults
-import com.example.popsandbops.data.BlobShapePreset
+import com.example.popsandbops.data.BlobShapeNode
+import com.example.popsandbops.data.BlobShapeTemplate
+import com.example.popsandbops.data.DEFAULT_BLOB_CURVE_TENSION
+import com.example.popsandbops.data.MAX_BLOB_NODE_COORDINATE
+import com.example.popsandbops.data.MAX_BLOB_SHAPE_NODES
+import com.example.popsandbops.data.MIN_BLOB_NODE_COORDINATE
+import com.example.popsandbops.data.MIN_BLOB_SHAPE_NODES
+import com.example.popsandbops.data.MapPoint
 import com.example.popsandbops.data.SoundBlob
+import com.example.popsandbops.data.autoHandleNodes
+import com.example.popsandbops.data.effectiveShapeNodes
+import com.example.popsandbops.data.isValidBlobShapeNodes
 import com.example.popsandbops.data.sanitizeTrimRange
+import com.example.popsandbops.data.toBlobShapeNodes
+import com.example.popsandbops.data.toShapePointMultipliers
 import com.example.popsandbops.ui.components.BlobPreview
 import com.example.popsandbops.ui.components.rememberPressFeedback
 import com.example.popsandbops.ui.components.WaveformView
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -98,6 +112,7 @@ fun SoundEditorScreen(
     val hasChanges = draft != blob
     val canSave = draft.name.isNotBlank() && hasChanges
     var selectedShapePoint by remember(blob.id) { mutableIntStateOf(-1) }
+    val draftShapeNodes = draft.effectiveShapeNodes()
 
     BackHandler(enabled = isEditingShape) {
         isEditingShape = false
@@ -105,13 +120,18 @@ fun SoundEditorScreen(
 
     if (isEditingShape) {
         ShapeVectorEditorScreen(
-            points = draft.shapePoints,
+            nodes = draftShapeNodes,
             curveTension = draft.curveTension,
             color = draft.color,
             selectedPoint = selectedShapePoint,
             modifier = modifier.fillMaxSize(),
             onSelectedPointChange = { selectedShapePoint = it },
-            onPointsChange = { draft = draft.copy(shapePoints = it) },
+            onNodesChange = { nodes ->
+                draft = draft.copy(
+                    shapeNodes = nodes,
+                    shapePoints = nodes.toShapePointMultipliers(),
+                )
+            },
             onCurveTensionChange = { draft = draft.copy(curveTension = it) },
             onDone = { isEditingShape = false },
         )
@@ -184,6 +204,7 @@ fun SoundEditorScreen(
                     points = draft.shapePoints,
                     modifier = Modifier.size(136.dp),
                     curveTension = draft.curveTension,
+                    nodes = draftShapeNodes,
                 )
                 Text(
                     text = draft.name,
@@ -240,6 +261,7 @@ fun SoundEditorScreen(
             CustomColorMixer(
                 colorArgb = draft.colorArgb,
                 shapePoints = draft.shapePoints,
+                shapeNodes = draftShapeNodes,
                 curveTension = draft.curveTension,
                 onColorChange = { draft = draft.copy(colorArgb = it) },
             )
@@ -247,14 +269,14 @@ fun SoundEditorScreen(
 
         EditorSection(title = "Shape") {
             ShapePresetGrid(
-                selectedPoints = draft.shapePoints,
-                selectedCurveTension = draft.curveTension,
+                selectedNodes = draftShapeNodes,
                 color = draft.color,
-                onPresetSelected = { preset, points, curveTension ->
+                onPresetSelected = { shape ->
                     draft = draft.copy(
-                        shapePreset = preset,
-                        shapePoints = points,
-                        curveTension = curveTension,
+                        shapePreset = shape.preset,
+                        shapePoints = shape.points,
+                        curveTension = shape.curveTension,
+                        shapeNodes = shape.nodes,
                     )
                     selectedShapePoint = -1
                 },
@@ -274,9 +296,10 @@ fun SoundEditorScreen(
                         points = draft.shapePoints,
                         modifier = Modifier.size(86.dp),
                         curveTension = draft.curveTension,
+                        nodes = draftShapeNodes,
                     )
                     Text(
-                        text = "${draft.shapePoints.size} points",
+                        text = "${draftShapeNodes.size} points",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
                     )
@@ -356,10 +379,9 @@ private fun EditorSection(
 
 @Composable
 private fun ShapePresetGrid(
-    selectedPoints: List<Float>,
-    selectedCurveTension: Float,
+    selectedNodes: List<BlobShapeNode>,
     color: Color,
-    onPresetSelected: (BlobShapePreset, List<Float>, Float) -> Unit,
+    onPresetSelected: (BlobShapeTemplate) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -372,8 +394,7 @@ private fun ShapePresetGrid(
             ) {
                 row.forEach { shape ->
                     val press = rememberPressFeedback(pressedScale = 0.92f)
-                    val isSelected = shapePointsMatch(selectedPoints, shape.points) &&
-                        abs(selectedCurveTension - shape.curveTension) < 0.001f
+                    val isSelected = shapeNodesMatch(selectedNodes, shape.nodes)
                     Surface(
                         modifier = Modifier
                             .weight(1f)
@@ -382,7 +403,7 @@ private fun ShapePresetGrid(
                             .clickable(
                                 interactionSource = press.interactionSource,
                                 indication = LocalIndication.current,
-                            ) { onPresetSelected(shape.preset, shape.points, shape.curveTension) },
+                            ) { onPresetSelected(shape) },
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         tonalElevation = if (press.isPressed) 5.dp else 0.dp,
@@ -400,6 +421,7 @@ private fun ShapePresetGrid(
                             points = shape.points,
                             modifier = Modifier.padding(7.dp),
                             curveTension = shape.curveTension,
+                            nodes = shape.nodes,
                         )
                     }
                 }
@@ -475,13 +497,10 @@ private fun ColorSwatch(
 private fun CustomColorMixer(
     colorArgb: Long,
     shapePoints: List<Float>,
+    shapeNodes: List<BlobShapeNode>,
     curveTension: Float,
     onColorChange: (Long) -> Unit,
 ) {
-    val red = colorComponent(colorArgb, 16)
-    val green = colorComponent(colorArgb, 8)
-    val blue = colorComponent(colorArgb, 0)
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
@@ -501,6 +520,7 @@ private fun CustomColorMixer(
                     points = shapePoints,
                     modifier = Modifier.size(74.dp),
                     curveTension = curveTension,
+                    nodes = shapeNodes,
                 )
                 Column(
                     modifier = Modifier.weight(1f),
@@ -518,60 +538,56 @@ private fun CustomColorMixer(
                     )
                 }
             }
-            ColorSlider(
-                label = "Red",
-                value = red,
-                color = Color(0xFFFF5A7A),
-                onValueChange = { onColorChange(argbFromComponents(it, green, blue)) },
-            )
-            ColorSlider(
-                label = "Green",
-                value = green,
-                color = Color(0xFF28C7B7),
-                onValueChange = { onColorChange(argbFromComponents(red, it, blue)) },
-            )
-            ColorSlider(
-                label = "Blue",
-                value = blue,
-                color = Color(0xFF4D96FF),
-                onValueChange = { onColorChange(argbFromComponents(red, green, it)) },
+            ColorWheelPicker(
+                colorArgb = colorArgb,
+                onColorChange = onColorChange,
             )
         }
     }
 }
 
 @Composable
-private fun ColorSlider(
-    label: String,
-    value: Float,
-    color: Color,
-    onValueChange: (Float) -> Unit,
+private fun ColorWheelPicker(
+    colorArgb: Long,
+    onColorChange: (Long) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val hsv = hsvFromArgb(colorArgb)
+    val latestColorArgb by rememberUpdatedState(colorArgb)
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(260.dp)
+            .pointerInput(Unit) {
+                fun updateFromOffset(offset: Offset, size: Size) {
+                    val currentHsv = hsvFromArgb(latestColorArgb)
+                    val geometry = colorPickerGeometry(size)
+                    val center = geometry.center
+                    val distance = hypot(offset.x - center.x, offset.y - center.y)
+                    val hue = if (distance in geometry.hueInnerRadius..geometry.hueOuterRadius) {
+                        angleDegrees(offset - center)
+                    } else {
+                        currentHsv[0]
+                    }
+                    val sv = if (distance < geometry.hueInnerRadius) {
+                        saturationValueFromTriangle(offset, geometry, currentHsv)
+                    } else {
+                        currentHsv[1] to currentHsv[2]
+                    }
+                    onColorChange(argbFromHsv(hue, sv.first, sv.second))
+                }
+
+                detectDragGestures(
+                    onDragStart = { updateFromOffset(it, Size(size.width.toFloat(), size.height.toFloat())) },
+                ) { change, _ ->
+                    change.consume()
+                    updateFromOffset(change.position, Size(size.width.toFloat(), size.height.toFloat()))
+                }
+            },
     ) {
-        Text(
-            text = label,
-            modifier = Modifier.size(width = 48.dp, height = 22.dp),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = color,
-        )
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = 0f..255f,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = value.roundToInt().toString(),
-            modifier = Modifier.size(width = 34.dp, height = 22.dp),
-            style = MaterialTheme.typography.labelMedium,
-            textAlign = TextAlign.End,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
-        )
+        val geometry = colorPickerGeometry(size)
+        drawHueRing(geometry)
+        drawSaturationValueTriangle(geometry, hsv[0])
+        drawColorPickerMarkers(geometry, hsv)
     }
 }
 
@@ -618,13 +634,13 @@ private fun EditorNameField(
 
 @Composable
 private fun ShapeVectorEditorScreen(
-    points: List<Float>,
+    nodes: List<BlobShapeNode>,
     curveTension: Float,
     color: Color,
     selectedPoint: Int,
     modifier: Modifier = Modifier,
     onSelectedPointChange: (Int) -> Unit,
-    onPointsChange: (List<Float>) -> Unit,
+    onNodesChange: (List<BlobShapeNode>) -> Unit,
     onCurveTensionChange: (Float) -> Unit,
     onDone: () -> Unit,
 ) {
@@ -658,7 +674,7 @@ private fun ShapeVectorEditorScreen(
                     fontWeight = FontWeight.Black,
                 )
                 Text(
-                    text = "${points.size} points",
+                    text = "${nodes.size} points",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.58f),
                 )
@@ -683,18 +699,21 @@ private fun ShapeVectorEditorScreen(
             tonalElevation = 1.dp,
         ) {
             ShapeVectorCanvas(
-                points = points,
+                nodes = nodes,
                 curveTension = curveTension,
                 color = color,
                 selectedPoint = selectedPoint,
                 modifier = Modifier.fillMaxSize(),
                 onSelectedPointChange = onSelectedPointChange,
-                onPointsChange = onPointsChange,
+                onNodesChange = onNodesChange,
             )
         }
 
-        CurveSoftnessControl(
+        PointCurveControl(
+            nodes = nodes,
+            selectedPoint = selectedPoint,
             curveTension = curveTension,
+            onNodesChange = onNodesChange,
             onCurveTensionChange = onCurveTensionChange,
         )
 
@@ -704,11 +723,11 @@ private fun ShapeVectorEditorScreen(
         ) {
             Button(
                 onClick = {
-                    val (nextPoints, nextSelection) = addPointPreservingOutline(points, selectedPoint)
+                    val (nextPoints, nextSelection) = addPointPreservingOutline(nodes, selectedPoint)
                     onSelectedPointChange(nextSelection)
-                    onPointsChange(nextPoints)
+                    onNodesChange(nextPoints)
                 },
-                enabled = points.size < MAX_SHAPE_POINTS,
+                enabled = nodes.size < MAX_BLOB_SHAPE_NODES,
                 modifier = Modifier
                     .weight(1f)
                     .scale(addPointPress.scale),
@@ -720,11 +739,11 @@ private fun ShapeVectorEditorScreen(
             }
             Button(
                 onClick = {
-                    val (nextPoints, nextSelection) = removePointPreservingOutline(points, selectedPoint)
+                    val (nextPoints, nextSelection) = removePointPreservingOutline(nodes, selectedPoint)
                     onSelectedPointChange(nextSelection)
-                    onPointsChange(nextPoints)
+                    onNodesChange(nextPoints)
                 },
-                enabled = points.size > MIN_SHAPE_POINTS && selectedPoint in points.indices,
+                enabled = nodes.size > MIN_BLOB_SHAPE_NODES && selectedPoint in nodes.indices,
                 modifier = Modifier
                     .weight(1f)
                     .scale(removePointPress.scale),
@@ -740,16 +759,18 @@ private fun ShapeVectorEditorScreen(
 
 @Composable
 private fun ShapeVectorCanvas(
-    points: List<Float>,
+    nodes: List<BlobShapeNode>,
     curveTension: Float,
     color: Color,
     selectedPoint: Int,
     modifier: Modifier = Modifier,
     onSelectedPointChange: (Int) -> Unit,
-    onPointsChange: (List<Float>) -> Unit,
+    onNodesChange: (List<BlobShapeNode>) -> Unit,
 ) {
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-    var activePoint by remember { mutableIntStateOf(-1) }
+    var activeTarget by remember { mutableStateOf<ShapeDragTarget?>(null) }
+    val latestNodes by rememberUpdatedState(nodes)
+    val latestSelectedPoint by rememberUpdatedState(selectedPoint)
     val activeHandleColor = MaterialTheme.colorScheme.primary
     val handleBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
     val guideColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
@@ -758,87 +779,98 @@ private fun ShapeVectorCanvas(
     Canvas(
         modifier = modifier
             .onSizeChanged { canvasSize = it }
-            .pointerInput(points, canvasSize) {
+            .pointerInput(canvasSize) {
                 detectTapGestures { offset ->
-                    val anchors = handleOffsets(Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()), points)
-                    val handle = nearestHandle(offset, anchors, SELECT_HANDLE_RADIUS_PX)
-                    if (handle != null) {
-                        onSelectedPointChange(handle)
+                    val target = nearestShapeTarget(
+                        offset = offset,
+                        nodes = latestNodes,
+                        size = Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()),
+                        selectedPoint = latestSelectedPoint,
+                        radius = SELECT_HANDLE_RADIUS_PX,
+                    )
+                    if (target != null) {
+                        onSelectedPointChange(target.index)
                     } else {
                         onSelectedPointChange(-1)
                     }
                 }
             }
-            .pointerInput(points, canvasSize) {
+            .pointerInput(canvasSize) {
                 detectDragGestures(
                     onDragStart = { offset ->
-                        val anchors = handleOffsets(Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()), points)
-                        activePoint = targetDragHandle(offset, anchors, selectedPoint)
-                        if (activePoint >= 0) {
-                            onSelectedPointChange(activePoint)
+                        activeTarget = nearestShapeTarget(
+                            offset = offset,
+                            nodes = latestNodes,
+                            size = Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()),
+                            selectedPoint = latestSelectedPoint,
+                            radius = DRAG_HANDLE_RADIUS_PX,
+                        )
+                        activeTarget?.let {
+                            onSelectedPointChange(it.index)
                         }
                     },
-                    onDragEnd = { activePoint = -1 },
-                    onDragCancel = { activePoint = -1 },
+                    onDragEnd = { activeTarget = null },
+                    onDragCancel = { activeTarget = null },
                 ) { change, _ ->
-                    val index = activePoint
-                    if (index >= 0) {
+                    val target = activeTarget
+                    if (target != null) {
                         change.consume()
-                        val next = points.toMutableList()
-                        next[index] = multiplierFor(change.position, canvasSize)
-                        onPointsChange(next)
+                        onNodesChange(
+                            moveShapeTarget(
+                                nodes = latestNodes,
+                                target = target,
+                                position = change.position,
+                                size = canvasSize,
+                            ),
+                        )
                     }
                 }
             },
     ) {
-        val safePoints = points.ifEmpty { List(8) { 1f } }
-        val handles = handleOffsets(size, safePoints)
-        val path = smoothPathFromAnchors(handles, curveTension)
-        val segments = curveSegments(handles, curveTension)
+        val safeNodes = nodes.takeIf { it.isValidBlobShapeNodes() }
+            ?: List(8) { 1f }.toBlobShapeNodes(curveTension)
+        val canvasNodes = safeNodes.toCanvasNodes(size)
+        val path = pathFromCanvasNodes(canvasNodes)
 
         drawVectorGrid(color = guideColor)
 
-        handles.forEach { handle ->
-            drawLine(
-                color = guideColor.copy(alpha = 0.28f),
-                start = center,
-                end = handle,
-                strokeWidth = 1.dp.toPx(),
-            )
-        }
-        handles.forEachIndexed { index, handle ->
+        canvasNodes.forEachIndexed { index, node ->
             drawLine(
                 color = outlineColor.copy(alpha = 0.32f),
-                start = handle,
-                end = handles[(index + 1) % handles.size],
+                start = node.anchor,
+                end = canvasNodes[(index + 1) % canvasNodes.size].anchor,
                 strokeWidth = 1.5.dp.toPx(),
             )
         }
 
         drawPath(path = path, color = color.copy(alpha = 0.28f))
-        segments.forEach { segment ->
+        if (selectedPoint in canvasNodes.indices) {
+            val selected = canvasNodes[selectedPoint]
             drawLine(
                 color = guideColor.copy(alpha = 0.42f),
-                start = segment.start,
-                end = segment.controlOne,
+                start = selected.anchor,
+                end = selected.inHandle,
                 strokeWidth = 1.dp.toPx(),
             )
             drawLine(
                 color = guideColor.copy(alpha = 0.42f),
-                start = segment.end,
-                end = segment.controlTwo,
+                start = selected.anchor,
+                end = selected.outHandle,
                 strokeWidth = 1.dp.toPx(),
             )
-            drawCircle(
-                color = guideColor.copy(alpha = 0.50f),
-                radius = 3.dp.toPx(),
-                center = segment.controlOne,
-            )
-            drawCircle(
-                color = guideColor.copy(alpha = 0.50f),
-                radius = 3.dp.toPx(),
-                center = segment.controlTwo,
-            )
+            listOf(selected.inHandle, selected.outHandle).forEach { handle ->
+                drawCircle(
+                    color = activeHandleColor.copy(alpha = 0.88f),
+                    radius = 10.dp.toPx(),
+                    center = handle,
+                )
+                drawCircle(
+                    color = handleBorderColor,
+                    radius = 10.dp.toPx(),
+                    center = handle,
+                    style = Stroke(width = 2.dp.toPx()),
+                )
+            }
         }
         drawPath(
             path = path,
@@ -851,16 +883,16 @@ private fun ShapeVectorCanvas(
             center = center,
         )
 
-        handles.forEachIndexed { index, offset ->
+        canvasNodes.forEachIndexed { index, node ->
             drawCircle(
-                color = if (index == activePoint || index == selectedPoint) activeHandleColor else Color.White,
+                color = if (activeTarget?.index == index || index == selectedPoint) activeHandleColor else Color.White,
                 radius = if (index == selectedPoint) 18.dp.toPx() else 13.dp.toPx(),
-                center = offset,
+                center = node.anchor,
             )
             drawCircle(
                 color = handleBorderColor,
                 radius = if (index == selectedPoint) 18.dp.toPx() else 13.dp.toPx(),
-                center = offset,
+                center = node.anchor,
                 style = Stroke(width = 2.dp.toPx()),
             )
         }
@@ -868,10 +900,20 @@ private fun ShapeVectorCanvas(
 }
 
 @Composable
-private fun CurveSoftnessControl(
+private fun PointCurveControl(
+    nodes: List<BlobShapeNode>,
+    selectedPoint: Int,
     curveTension: Float,
+    onNodesChange: (List<BlobShapeNode>) -> Unit,
     onCurveTensionChange: (Float) -> Unit,
 ) {
+    val hasSelection = selectedPoint in nodes.indices
+    val curveAmount = if (hasSelection) {
+        selectedHandleDistance(nodes[selectedPoint])
+    } else {
+        curveTension
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
@@ -888,68 +930,151 @@ private fun CurveSoftnessControl(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Curve",
+                    text = "Point curve",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = if (curveTension < 0.12f) "Sharp" else if (curveTension > 0.28f) "Soft" else "Balanced",
+                    text = if (hasSelection) "Selected" else "None",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
                 )
             }
             Slider(
-                value = curveTension,
-                onValueChange = onCurveTensionChange,
-                valueRange = MIN_CURVE_TENSION..MAX_CURVE_TENSION,
+                value = curveAmount.coerceIn(0f, MAX_SELECTED_HANDLE_DISTANCE),
+                onValueChange = { amount ->
+                    if (hasSelection) {
+                        onNodesChange(scaleSelectedHandles(nodes, selectedPoint, amount))
+                    } else {
+                        onCurveTensionChange(amount.coerceIn(MIN_CURVE_TENSION, MAX_CURVE_TENSION))
+                    }
+                },
+                valueRange = 0f..MAX_SELECTED_HANDLE_DISTANCE,
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Button(
+                    onClick = { onNodesChange(smoothSelectedNode(nodes, selectedPoint, curveTension)) },
+                    enabled = hasSelection,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Smooth")
+                }
+                Button(
+                    onClick = { onNodesChange(cornerSelectedNode(nodes, selectedPoint)) },
+                    enabled = hasSelection,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Corner")
+                }
+            }
         }
     }
 }
 
-private fun handleOffsets(size: Size, points: List<Float>): List<Offset> {
-    val safePoints = points.ifEmpty { List(8) { 1f } }
-    val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = shapeEditRadius(size)
-    return safePoints.mapIndexed { index, multiplier ->
-        val angle = (index.toFloat() / safePoints.size) * PI.toFloat() * 2f - PI.toFloat() / 2f
-        Offset(
-            x = center.x + cos(angle) * radius * multiplier,
-            y = center.y + sin(angle) * radius * multiplier,
+private data class CanvasShapeNode(
+    val anchor: Offset,
+    val inHandle: Offset,
+    val outHandle: Offset,
+)
+
+private enum class ShapeHandle {
+    Anchor,
+    InHandle,
+    OutHandle,
+}
+
+private data class ShapeDragTarget(
+    val index: Int,
+    val handle: ShapeHandle,
+)
+
+private fun List<BlobShapeNode>.toCanvasNodes(size: Size): List<CanvasShapeNode> {
+    return map { node ->
+        CanvasShapeNode(
+            anchor = node.anchor.toCanvasOffset(size),
+            inHandle = node.inHandle.toCanvasOffset(size),
+            outHandle = node.outHandle.toCanvasOffset(size),
         )
     }
 }
 
-private fun nearestHandle(offset: Offset, anchors: List<Offset>, radius: Float): Int? {
-    return anchors
-        .mapIndexed { index, anchor -> index to hypot(offset.x - anchor.x, offset.y - anchor.y) }
+private fun MapPoint.toCanvasOffset(size: Size): Offset {
+    val center = Offset(size.width / 2f, size.height / 2f)
+    val radius = shapeEditRadius(size)
+    return Offset(
+        x = center.x + x * radius,
+        y = center.y + y * radius,
+    )
+}
+
+private fun Offset.toShapePoint(size: IntSize): MapPoint {
+    val safeSize = Size(size.width.toFloat(), size.height.toFloat())
+    val center = Offset(safeSize.width / 2f, safeSize.height / 2f)
+    val radius = shapeEditRadius(safeSize).coerceAtLeast(1f)
+    return MapPoint(
+        x = ((x - center.x) / radius).coerceIn(MIN_BLOB_NODE_COORDINATE, MAX_BLOB_NODE_COORDINATE),
+        y = ((y - center.y) / radius).coerceIn(MIN_BLOB_NODE_COORDINATE, MAX_BLOB_NODE_COORDINATE),
+    )
+}
+
+private fun shapeEditRadius(size: Size): Float {
+    return size.minDimension * 0.38f
+}
+
+private fun nearestShapeTarget(
+    offset: Offset,
+    nodes: List<BlobShapeNode>,
+    size: Size,
+    selectedPoint: Int,
+    radius: Float,
+): ShapeDragTarget? {
+    val canvasNodes = nodes.toCanvasNodes(size)
+    val targets = mutableListOf<Pair<ShapeDragTarget, Offset>>()
+    if (selectedPoint in canvasNodes.indices) {
+        val selected = canvasNodes[selectedPoint]
+        targets += ShapeDragTarget(selectedPoint, ShapeHandle.InHandle) to selected.inHandle
+        targets += ShapeDragTarget(selectedPoint, ShapeHandle.OutHandle) to selected.outHandle
+    }
+    canvasNodes.forEachIndexed { index, node ->
+        targets += ShapeDragTarget(index, ShapeHandle.Anchor) to node.anchor
+    }
+    return targets
+        .map { (target, targetOffset) ->
+            target to hypot(offset.x - targetOffset.x, offset.y - targetOffset.y)
+        }
         .minByOrNull { it.second }
         ?.takeIf { it.second < radius }
         ?.first
 }
 
-private fun targetDragHandle(offset: Offset, anchors: List<Offset>, selectedPoint: Int): Int {
-    val directHandle = nearestHandle(offset, anchors, DRAG_HANDLE_RADIUS_PX)
-    if (directHandle != null) return directHandle
-    if (selectedPoint in anchors.indices) {
-        val selected = anchors[selectedPoint]
-        val selectedDistance = hypot(offset.x - selected.x, offset.y - selected.y)
-        if (selectedDistance < SELECTED_HANDLE_DRAG_RADIUS_PX) {
-            return selectedPoint
+private fun moveShapeTarget(
+    nodes: List<BlobShapeNode>,
+    target: ShapeDragTarget,
+    position: Offset,
+    size: IntSize,
+): List<BlobShapeNode> {
+    if (target.index !in nodes.indices) return nodes
+    val next = nodes.toMutableList()
+    val node = next[target.index]
+    val point = position.toShapePoint(size)
+    next[target.index] = when (target.handle) {
+        ShapeHandle.Anchor -> {
+            val dx = point.x - node.anchor.x
+            val dy = point.y - node.anchor.y
+            node.copy(
+                anchor = point,
+                inHandle = node.inHandle.translate(dx, dy),
+                outHandle = node.outHandle.translate(dx, dy),
+            )
         }
+
+        ShapeHandle.InHandle -> node.copy(inHandle = point)
+        ShapeHandle.OutHandle -> node.copy(outHandle = point)
     }
-    return -1
-}
-
-private fun multiplierFor(offset: Offset, size: IntSize): Float {
-    val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = shapeEditRadius(Size(size.width.toFloat(), size.height.toFloat()))
-    return (hypot(offset.x - center.x, offset.y - center.y) / radius)
-        .coerceIn(MIN_SHAPE_MULTIPLIER, MAX_SHAPE_MULTIPLIER)
-}
-
-private fun shapeEditRadius(size: Size): Float {
-    return size.minDimension * 0.34f
+    return next
 }
 
 private fun DrawScope.drawVectorGrid(color: Color) {
@@ -969,88 +1094,153 @@ private fun DrawScope.drawVectorGrid(color: Color) {
     }
 }
 
-private data class CurveSegment(
-    val start: Offset,
-    val controlOne: Offset,
-    val controlTwo: Offset,
-    val end: Offset,
-)
-
-private fun smoothPathFromAnchors(anchors: List<Offset>, curveTension: Float): Path {
+private fun pathFromCanvasNodes(nodes: List<CanvasShapeNode>): Path {
     val path = Path()
-    if (anchors.isEmpty()) return path
-    path.moveTo(anchors.first().x, anchors.first().y)
-    curveSegments(anchors, curveTension).forEach { segment ->
+    if (nodes.isEmpty()) return path
+    path.moveTo(nodes.first().anchor.x, nodes.first().anchor.y)
+    nodes.forEachIndexed { index, node ->
+        val next = nodes[(index + 1) % nodes.size]
         path.cubicTo(
-            segment.controlOne.x,
-            segment.controlOne.y,
-            segment.controlTwo.x,
-            segment.controlTwo.y,
-            segment.end.x,
-            segment.end.y,
+            node.outHandle.x,
+            node.outHandle.y,
+            next.inHandle.x,
+            next.inHandle.y,
+            next.anchor.x,
+            next.anchor.y,
         )
     }
     path.close()
     return path
 }
 
-private fun curveSegments(anchors: List<Offset>, curveTension: Float): List<CurveSegment> {
-    if (anchors.isEmpty()) return emptyList()
-    val tension = curveTension.coerceIn(MIN_CURVE_TENSION, MAX_CURVE_TENSION)
-    return anchors.mapIndexed { index, anchor ->
-        val previous = anchors[(index - 1 + anchors.size) % anchors.size]
-        val next = anchors[(index + 1) % anchors.size]
-        val afterNext = anchors[(index + 2) % anchors.size]
-        CurveSegment(
-            start = anchor,
-            controlOne = Offset(
-                x = anchor.x + (next.x - previous.x) * tension,
-                y = anchor.y + (next.y - previous.y) * tension,
-            ),
-            controlTwo = Offset(
-                x = next.x - (afterNext.x - anchor.x) * tension,
-                y = next.y - (afterNext.y - anchor.y) * tension,
-            ),
-            end = next,
-        )
-    }
+private fun addPointPreservingOutline(
+    nodes: List<BlobShapeNode>,
+    selectedPoint: Int,
+): Pair<List<BlobShapeNode>, Int> {
+    val safeNodes = nodes.takeIf { it.isValidBlobShapeNodes() } ?: List(8) { 1f }.toBlobShapeNodes()
+    val startIndex = selectedPoint.takeIf { it in safeNodes.indices } ?: safeNodes.lastIndex
+    val endIndex = (startIndex + 1).floorMod(safeNodes.size)
+    val start = safeNodes[startIndex]
+    val end = safeNodes[endIndex]
+
+    val p01 = start.anchor.lerp(start.outHandle, 0.5f)
+    val p12 = start.outHandle.lerp(end.inHandle, 0.5f)
+    val p23 = end.inHandle.lerp(end.anchor, 0.5f)
+    val p012 = p01.lerp(p12, 0.5f)
+    val p123 = p12.lerp(p23, 0.5f)
+    val midpoint = p012.lerp(p123, 0.5f)
+
+    val next = safeNodes.toMutableList()
+    next[startIndex] = start.copy(outHandle = p01)
+    val insertIndex = if (endIndex == 0) next.size else endIndex
+    next.add(
+        insertIndex,
+        BlobShapeNode(
+            anchor = midpoint,
+            inHandle = p012,
+            outHandle = p123,
+        ),
+    )
+    val shiftedEndIndex = if (endIndex == 0) 0 else insertIndex + 1
+    next[shiftedEndIndex] = next[shiftedEndIndex].copy(inHandle = p23)
+    return next to insertIndex
 }
 
-private fun addPointPreservingOutline(points: List<Float>, selectedPoint: Int): Pair<List<Float>, Int> {
-    val safePoints = points.ifEmpty { List(MIN_SHAPE_POINTS) { 1f } }
-    val nextCount = (safePoints.size + 1).coerceAtMost(MAX_SHAPE_POINTS)
-    val nextPoints = resampleShapePoints(safePoints, nextCount)
-    val edgeStart = selectedPoint.takeIf { it in safePoints.indices } ?: safePoints.lastIndex
-    val midpointTurns = (edgeStart + 0.5f) / safePoints.size.toFloat()
-    val nextSelection = (midpointTurns * nextCount).roundToInt().floorMod(nextCount)
-    return nextPoints to nextSelection
+private fun removePointPreservingOutline(
+    nodes: List<BlobShapeNode>,
+    selectedPoint: Int,
+): Pair<List<BlobShapeNode>, Int> {
+    if (nodes.size <= MIN_BLOB_SHAPE_NODES || selectedPoint !in nodes.indices) {
+        return nodes to selectedPoint
+    }
+    val next = nodes.toMutableList()
+    next.removeAt(selectedPoint)
+    val auto = autoHandleNodes(next.map { it.anchor }, DEFAULT_BLOB_CURVE_TENSION)
+    val previousIndex = (selectedPoint - 1).floorMod(next.size)
+    val nextIndex = selectedPoint.floorMod(next.size)
+    next[previousIndex] = next[previousIndex].copy(outHandle = auto[previousIndex].outHandle)
+    next[nextIndex] = next[nextIndex].copy(inHandle = auto[nextIndex].inHandle)
+    return next to nextIndex
 }
 
-private fun removePointPreservingOutline(points: List<Float>, selectedPoint: Int): Pair<List<Float>, Int> {
-    val safePoints = points.ifEmpty { List(MIN_SHAPE_POINTS) { 1f } }
-    val nextCount = (safePoints.size - 1).coerceAtLeast(MIN_SHAPE_POINTS)
-    val nextPoints = resampleShapePoints(safePoints, nextCount)
-    val nextSelection = if (nextPoints.isEmpty()) {
-        -1
-    } else {
-        ((selectedPoint.coerceAtLeast(0) / safePoints.size.toFloat()) * nextCount)
-            .roundToInt()
-            .coerceIn(0, nextPoints.lastIndex)
-    }
-    return nextPoints to nextSelection
+private fun smoothSelectedNode(
+    nodes: List<BlobShapeNode>,
+    selectedPoint: Int,
+    curveTension: Float,
+): List<BlobShapeNode> {
+    if (selectedPoint !in nodes.indices) return nodes
+    val auto = autoHandleNodes(nodes.map { it.anchor }, curveTension)
+    return nodes.toMutableList().also { it[selectedPoint] = auto[selectedPoint] }
 }
 
-private fun resampleShapePoints(points: List<Float>, targetCount: Int): List<Float> {
-    if (points.isEmpty()) return List(targetCount) { 1f }
-    if (points.size == targetCount) return points
-    return List(targetCount) { index ->
-        val oldPosition = index * points.size / targetCount.toFloat()
-        val lowerIndex = floor(oldPosition).toInt().floorMod(points.size)
-        val upperIndex = (lowerIndex + 1).floorMod(points.size)
-        val fraction = oldPosition - floor(oldPosition)
-        lerp(points[lowerIndex], points[upperIndex], fraction)
-            .coerceIn(MIN_SHAPE_MULTIPLIER, MAX_SHAPE_MULTIPLIER)
+private fun cornerSelectedNode(nodes: List<BlobShapeNode>, selectedPoint: Int): List<BlobShapeNode> {
+    if (selectedPoint !in nodes.indices) return nodes
+    val next = nodes.toMutableList()
+    val node = next[selectedPoint]
+    next[selectedPoint] = node.copy(inHandle = node.anchor, outHandle = node.anchor)
+    return next
+}
+
+private fun scaleSelectedHandles(
+    nodes: List<BlobShapeNode>,
+    selectedPoint: Int,
+    distance: Float,
+): List<BlobShapeNode> {
+    if (selectedPoint !in nodes.indices) return nodes
+    val auto = autoHandleNodes(nodes.map { it.anchor }, DEFAULT_BLOB_CURVE_TENSION)
+    val next = nodes.toMutableList()
+    val node = next[selectedPoint]
+    val fallback = auto[selectedPoint]
+    next[selectedPoint] = node.copy(
+        inHandle = scaledHandle(node.anchor, node.inHandle, fallback.inHandle, distance),
+        outHandle = scaledHandle(node.anchor, node.outHandle, fallback.outHandle, distance),
+    )
+    return next
+}
+
+private fun selectedHandleDistance(node: BlobShapeNode): Float {
+    val incoming = hypot(node.inHandle.x - node.anchor.x, node.inHandle.y - node.anchor.y)
+    val outgoing = hypot(node.outHandle.x - node.anchor.x, node.outHandle.y - node.anchor.y)
+    return ((incoming + outgoing) / 2f).coerceIn(0f, MAX_SELECTED_HANDLE_DISTANCE)
+}
+
+private fun scaledHandle(
+    anchor: MapPoint,
+    handle: MapPoint,
+    fallback: MapPoint,
+    distance: Float,
+): MapPoint {
+    var dx = handle.x - anchor.x
+    var dy = handle.y - anchor.y
+    var length = hypot(dx, dy)
+    if (length < 0.001f) {
+        dx = fallback.x - anchor.x
+        dy = fallback.y - anchor.y
+        length = hypot(dx, dy).coerceAtLeast(0.001f)
     }
+    val scale = distance / length
+    return MapPoint(
+        x = anchor.x + dx * scale,
+        y = anchor.y + dy * scale,
+    ).coerceShapePoint()
+}
+
+private fun MapPoint.translate(dx: Float, dy: Float): MapPoint {
+    return MapPoint(x + dx, y + dy).coerceShapePoint()
+}
+
+private fun MapPoint.coerceShapePoint(): MapPoint {
+    return MapPoint(
+        x = x.coerceIn(MIN_BLOB_NODE_COORDINATE, MAX_BLOB_NODE_COORDINATE),
+        y = y.coerceIn(MIN_BLOB_NODE_COORDINATE, MAX_BLOB_NODE_COORDINATE),
+    )
+}
+
+private fun MapPoint.lerp(end: MapPoint, fraction: Float): MapPoint {
+    return MapPoint(
+        x = lerp(x, end.x, fraction),
+        y = lerp(y, end.y, fraction),
+    )
 }
 
 private fun lerp(start: Float, end: Float, fraction: Float): Float {
@@ -1059,6 +1249,216 @@ private fun lerp(start: Float, end: Float, fraction: Float): Float {
 
 private fun Int.floorMod(modulus: Int): Int {
     return ((this % modulus) + modulus) % modulus
+}
+
+private data class ColorPickerGeometry(
+    val center: Offset,
+    val hueOuterRadius: Float,
+    val hueInnerRadius: Float,
+    val whiteVertex: Offset,
+    val hueVertex: Offset,
+    val blackVertex: Offset,
+)
+
+private data class BarycentricColor(
+    val white: Float,
+    val hue: Float,
+    val black: Float,
+)
+
+private fun colorPickerGeometry(size: Size): ColorPickerGeometry {
+    val center = Offset(size.width / 2f, size.height / 2f)
+    val hueOuterRadius = size.minDimension * 0.46f
+    val hueStrokeWidth = size.minDimension * 0.09f
+    val hueInnerRadius = hueOuterRadius - hueStrokeWidth
+    val triangleRadius = hueInnerRadius * 0.78f
+    return ColorPickerGeometry(
+        center = center,
+        hueOuterRadius = hueOuterRadius,
+        hueInnerRadius = hueInnerRadius,
+        whiteVertex = Offset(center.x - triangleRadius * 0.62f, center.y - triangleRadius * 0.72f),
+        hueVertex = Offset(center.x + triangleRadius * 0.86f, center.y),
+        blackVertex = Offset(center.x - triangleRadius * 0.62f, center.y + triangleRadius * 0.72f),
+    )
+}
+
+private fun DrawScope.drawHueRing(geometry: ColorPickerGeometry) {
+    val strokeWidth = geometry.hueOuterRadius - geometry.hueInnerRadius
+    val arcSize = Size(geometry.hueOuterRadius * 2f, geometry.hueOuterRadius * 2f)
+    val topLeft = Offset(
+        geometry.center.x - geometry.hueOuterRadius,
+        geometry.center.y - geometry.hueOuterRadius,
+    )
+    for (degree in 0 until 360 step 3) {
+        drawArc(
+            color = Color.hsv(degree.toFloat(), 1f, 1f),
+            startAngle = degree.toFloat(),
+            sweepAngle = 4f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = strokeWidth),
+        )
+    }
+}
+
+private fun DrawScope.drawSaturationValueTriangle(
+    geometry: ColorPickerGeometry,
+    hue: Float,
+) {
+    val minX = minOf(geometry.whiteVertex.x, geometry.hueVertex.x, geometry.blackVertex.x)
+    val maxX = maxOf(geometry.whiteVertex.x, geometry.hueVertex.x, geometry.blackVertex.x)
+    val minY = minOf(geometry.whiteVertex.y, geometry.hueVertex.y, geometry.blackVertex.y)
+    val maxY = maxOf(geometry.whiteVertex.y, geometry.hueVertex.y, geometry.blackVertex.y)
+    val samples = 58
+    val stepX = (maxX - minX) / samples
+    val stepY = (maxY - minY) / samples
+    repeat(samples + 1) { yIndex ->
+        repeat(samples + 1) { xIndex ->
+            val point = Offset(minX + xIndex * stepX, minY + yIndex * stepY)
+            val barycentric = barycentricFor(point, geometry)
+            if (barycentric.white >= -0.02f && barycentric.hue >= -0.02f && barycentric.black >= -0.02f) {
+                val (saturation, value) = saturationValueFromBarycentric(barycentric)
+                drawRect(
+                    color = Color.hsv(hue, saturation, value),
+                    topLeft = Offset(point.x - stepX / 2f, point.y - stepY / 2f),
+                    size = Size(stepX + 1.2f, stepY + 1.2f),
+                )
+            }
+        }
+    }
+
+    val path = Path().apply {
+        moveTo(geometry.whiteVertex.x, geometry.whiteVertex.y)
+        lineTo(geometry.hueVertex.x, geometry.hueVertex.y)
+        lineTo(geometry.blackVertex.x, geometry.blackVertex.y)
+        close()
+    }
+    drawPath(
+        path = path,
+        color = Color.Black.copy(alpha = 0.34f),
+        style = Stroke(width = 2.dp.toPx()),
+    )
+}
+
+private fun DrawScope.drawColorPickerMarkers(
+    geometry: ColorPickerGeometry,
+    hsv: FloatArray,
+) {
+    val hueAngle = Math.toRadians(hsv[0].toDouble()).toFloat()
+    val hueMarkerRadius = (geometry.hueInnerRadius + geometry.hueOuterRadius) / 2f
+    val hueMarker = Offset(
+        x = geometry.center.x + cos(hueAngle) * hueMarkerRadius,
+        y = geometry.center.y + sin(hueAngle) * hueMarkerRadius,
+    )
+    val svMarker = pointFromSaturationValue(hsv[1], hsv[2], geometry)
+
+    listOf(hueMarker, svMarker).forEach { marker ->
+        drawCircle(
+            color = Color.White,
+            radius = 7.dp.toPx(),
+            center = marker,
+        )
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.58f),
+            radius = 7.dp.toPx(),
+            center = marker,
+            style = Stroke(width = 2.dp.toPx()),
+        )
+    }
+}
+
+private fun saturationValueFromTriangle(
+    offset: Offset,
+    geometry: ColorPickerGeometry,
+    hsv: FloatArray,
+): Pair<Float, Float> {
+    val distance = hypot(offset.x - geometry.center.x, offset.y - geometry.center.y)
+    if (distance > geometry.hueInnerRadius) return hsv[1] to hsv[2]
+    return saturationValueFromBarycentric(
+        barycentricFor(offset, geometry).clamped(),
+    )
+}
+
+private fun saturationValueFromBarycentric(barycentric: BarycentricColor): Pair<Float, Float> {
+    val value = (barycentric.white + barycentric.hue).coerceIn(0f, 1f)
+    val saturation = if (value <= 0.001f) {
+        0f
+    } else {
+        (barycentric.hue / value).coerceIn(0f, 1f)
+    }
+    return saturation to value
+}
+
+private fun pointFromSaturationValue(
+    saturation: Float,
+    value: Float,
+    geometry: ColorPickerGeometry,
+): Offset {
+    val hueWeight = saturation.coerceIn(0f, 1f) * value.coerceIn(0f, 1f)
+    val whiteWeight = (1f - saturation.coerceIn(0f, 1f)) * value.coerceIn(0f, 1f)
+    val blackWeight = 1f - value.coerceIn(0f, 1f)
+    return Offset(
+        x = geometry.whiteVertex.x * whiteWeight +
+            geometry.hueVertex.x * hueWeight +
+            geometry.blackVertex.x * blackWeight,
+        y = geometry.whiteVertex.y * whiteWeight +
+            geometry.hueVertex.y * hueWeight +
+            geometry.blackVertex.y * blackWeight,
+    )
+}
+
+private fun barycentricFor(point: Offset, geometry: ColorPickerGeometry): BarycentricColor {
+    val white = geometry.whiteVertex
+    val hue = geometry.hueVertex
+    val black = geometry.blackVertex
+    val denominator = (hue.y - black.y) * (white.x - black.x) +
+        (black.x - hue.x) * (white.y - black.y)
+    if (abs(denominator) < 0.001f) {
+        return BarycentricColor(white = 0f, hue = 1f, black = 0f)
+    }
+    val whiteWeight = ((hue.y - black.y) * (point.x - black.x) +
+        (black.x - hue.x) * (point.y - black.y)) / denominator
+    val hueWeight = ((black.y - white.y) * (point.x - black.x) +
+        (white.x - black.x) * (point.y - black.y)) / denominator
+    val blackWeight = 1f - whiteWeight - hueWeight
+    return BarycentricColor(
+        white = whiteWeight,
+        hue = hueWeight,
+        black = blackWeight,
+    )
+}
+
+private fun BarycentricColor.clamped(): BarycentricColor {
+    val whiteWeight = white.coerceAtLeast(0f)
+    val hueWeight = hue.coerceAtLeast(0f)
+    val blackWeight = black.coerceAtLeast(0f)
+    val total = (whiteWeight + hueWeight + blackWeight).coerceAtLeast(0.001f)
+    return BarycentricColor(
+        white = whiteWeight / total,
+        hue = hueWeight / total,
+        black = blackWeight / total,
+    )
+}
+
+private fun angleDegrees(offset: Offset): Float {
+    return ((atan2(offset.y, offset.x) * 180f / PI.toFloat()) + 360f) % 360f
+}
+
+private fun hsvFromArgb(colorArgb: Long): FloatArray {
+    val hsv = FloatArray(3)
+    AndroidColor.colorToHSV(colorArgb.toInt(), hsv)
+    return hsv
+}
+
+private fun argbFromHsv(hue: Float, saturation: Float, value: Float): Long {
+    return AndroidColor.HSVToColor(
+        floatArrayOf(
+            hue.coerceIn(0f, 360f),
+            saturation.coerceIn(0f, 1f),
+            value.coerceIn(0f, 1f),
+        ),
+    ).toLong() and 0xFFFFFFFFL
 }
 
 private fun darker(color: Color): Color {
@@ -1074,13 +1474,6 @@ private fun colorComponent(colorArgb: Long, shift: Int): Float {
     return ((colorArgb shr shift) and 0xFFL).toFloat()
 }
 
-private fun argbFromComponents(red: Float, green: Float, blue: Float): Long {
-    val r = red.roundToInt().coerceIn(0, 255).toLong()
-    val g = green.roundToInt().coerceIn(0, 255).toLong()
-    val b = blue.roundToInt().coerceIn(0, 255).toLong()
-    return 0xFF000000L or (r shl 16) or (g shl 8) or b
-}
-
 private fun colorHex(colorArgb: Long): String {
     val red = colorComponent(colorArgb, 16).roundToInt()
     val green = colorComponent(colorArgb, 8).roundToInt()
@@ -1088,19 +1481,23 @@ private fun colorHex(colorArgb: Long): String {
     return "#%02X%02X%02X".format(red, green, blue)
 }
 
-private fun shapePointsMatch(left: List<Float>, right: List<Float>): Boolean {
-    return left.size == right.size && left.zip(right).all { (a, b) -> abs(a - b) < 0.001f }
+private fun shapeNodesMatch(left: List<BlobShapeNode>, right: List<BlobShapeNode>): Boolean {
+    return left.size == right.size && left.zip(right).all { (leftNode, rightNode) ->
+        leftNode.anchor.nearlyEquals(rightNode.anchor) &&
+            leftNode.inHandle.nearlyEquals(rightNode.inHandle) &&
+            leftNode.outHandle.nearlyEquals(rightNode.outHandle)
+    }
 }
 
-private const val MIN_SHAPE_POINTS = 5
-private const val MAX_SHAPE_POINTS = 24
-private const val MIN_SHAPE_MULTIPLIER = 0.48f
-private const val MAX_SHAPE_MULTIPLIER = 1.52f
+private fun MapPoint.nearlyEquals(other: MapPoint): Boolean {
+    return abs(x - other.x) < 0.001f && abs(y - other.y) < 0.001f
+}
+
 private const val MIN_CURVE_TENSION = 0.04f
 private const val MAX_CURVE_TENSION = 0.38f
+private const val MAX_SELECTED_HANDLE_DISTANCE = 0.80f
 private const val SELECT_HANDLE_RADIUS_PX = 86f
 private const val DRAG_HANDLE_RADIUS_PX = 104f
-private const val SELECTED_HANDLE_DRAG_RADIUS_PX = 142f
 
 private fun formatMs(ms: Int): String {
     val totalSeconds = (ms / 1_000f).coerceAtLeast(0f)

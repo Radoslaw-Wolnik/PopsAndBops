@@ -65,10 +65,10 @@ class SoundBlobTest {
     }
 
     @Test
-    fun shapeLibraryContainsTwentyFiveDistinctOrganicPresets() {
+    fun shapeLibraryContainsImportedEditableBlobPresets() {
         val shapes = BlobDefaults.shapeLibrary
 
-        assertEquals(25, shapes.size)
+        assertEquals(41, shapes.size)
         assertEquals(
             BlobShapePreset.entries.toSet(),
             shapes.map { it.first }.toSet(),
@@ -76,14 +76,16 @@ class SoundBlobTest {
         assertEquals(
             shapes.size,
             shapes.map { shape ->
-                shape.points.joinToString(separator = ",") { "%.3f".format(it) } +
-                    ":${"%.3f".format(shape.curveTension)}"
+                shape.assetName + ":" +
+                    shape.nodes.joinToString(separator = "|") { node ->
+                        "%.3f,%.3f".format(node.anchor.x, node.anchor.y)
+                    }
             }.toSet().size,
         )
-        assertTrue(shapes.all { it.points.size in 8..16 })
+        assertTrue(shapes.all { it.assetName?.startsWith("blob_") == true })
+        assertTrue(shapes.all { it.nodes.isValidBlobShapeNodes() })
+        assertTrue(shapes.all { it.points.size == it.nodes.size })
         assertTrue(shapes.all { it.points.all { point -> point in 0.48f..1.52f } })
-        assertTrue(shapes.any { it.curveTension < 0.10f })
-        assertTrue(shapes.any { it.curveTension > 0.30f })
     }
 
     private fun soundBlob(

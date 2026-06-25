@@ -2,13 +2,13 @@ package com.example.popsandbops.data
 
 import androidx.compose.ui.graphics.Color
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 const val MIN_SOUND_DURATION_MS = 250
 const val DEFAULT_BLOB_CURVE_TENSION = 0.18f
@@ -37,6 +37,12 @@ data class MapPoint(
     val y: Float,
 )
 
+data class BlobShapeNode(
+    val anchor: MapPoint,
+    val inHandle: MapPoint,
+    val outHandle: MapPoint,
+)
+
 data class TrimRange(
     val startMs: Int,
     val endMs: Int,
@@ -49,6 +55,8 @@ data class BlobShapeTemplate(
     val preset: BlobShapePreset,
     val points: List<Float>,
     val curveTension: Float,
+    val nodes: List<BlobShapeNode> = emptyList(),
+    val assetName: String? = null,
 ) {
     val first: BlobShapePreset
         get() = preset
@@ -66,6 +74,7 @@ data class SoundBlob(
     val shapePreset: BlobShapePreset,
     val shapePoints: List<Float>,
     val curveTension: Float = DEFAULT_BLOB_CURVE_TENSION,
+    val shapeNodes: List<BlobShapeNode> = emptyList(),
     val waveform: List<Float>,
     val trimStartMs: Int,
     val trimEndMs: Int,
@@ -113,37 +122,7 @@ object BlobDefaults {
         0xFF8AC926, 0xFF1982C4, 0xFF6A4C93, 0xFFFFCA3A,
     )
 
-    val shapeLibrary: List<BlobShapeTemplate> = listOf(
-        shape(BlobShapePreset.Splash, 0.15f, 1.42f, 0.70f, 1.18f, 0.82f, 1.36f, 0.64f, 1.08f, 0.88f, 1.30f, 0.76f, 1.16f, 0.92f),
-        shape(BlobShapePreset.Splash, 0.20f, 0.82f, 1.34f, 0.68f, 1.22f, 0.90f, 1.46f, 0.72f, 1.08f, 1.28f, 0.66f, 1.12f),
-        shape(BlobShapePreset.Splash, 0.12f, 1.48f, 0.62f, 1.42f, 0.74f, 1.30f, 0.86f, 1.44f, 0.60f, 1.20f, 0.92f, 1.36f, 0.70f, 1.08f),
-        shape(BlobShapePreset.Splash, 0.25f, 1.20f, 1.42f, 0.72f, 0.80f, 1.28f, 0.66f, 1.44f, 0.88f, 1.10f, 0.58f),
-        shape(BlobShapePreset.Splash, 0.10f, 0.64f, 1.42f, 0.78f, 1.18f, 1.46f, 0.70f, 1.02f, 0.62f, 1.34f, 0.84f, 1.24f, 0.68f, 1.12f, 0.96f),
-
-        shape(BlobShapePreset.Pebble, 0.28f, 1.26f, 1.20f, 1.04f, 0.84f, 0.72f, 0.92f, 1.12f, 1.30f, 1.16f),
-        shape(BlobShapePreset.Pebble, 0.31f, 0.82f, 1.02f, 1.34f, 1.26f, 0.98f, 0.76f, 0.88f, 1.18f, 1.28f, 1.08f),
-        shape(BlobShapePreset.Pebble, 0.22f, 1.40f, 1.14f, 0.92f, 0.68f, 0.86f, 1.04f, 1.22f, 1.34f),
-        shape(BlobShapePreset.Pebble, 0.34f, 0.74f, 0.92f, 1.12f, 1.36f, 1.42f, 1.16f, 0.94f, 0.78f),
-        shape(BlobShapePreset.Pebble, 0.18f, 1.18f, 0.82f, 0.74f, 1.08f, 1.38f, 1.24f, 0.88f, 0.68f, 1.02f, 1.30f),
-
-        shape(BlobShapePreset.Starburst, 0.06f, 1.48f, 0.54f, 1.26f, 0.62f, 1.44f, 0.58f, 1.18f, 0.70f, 1.38f, 0.52f, 1.30f, 0.66f),
-        shape(BlobShapePreset.Starburst, 0.08f, 0.58f, 1.46f, 0.64f, 1.18f, 0.54f, 1.40f, 0.72f, 1.24f, 0.60f, 1.34f, 0.68f, 1.12f, 0.56f, 1.44f),
-        shape(BlobShapePreset.Starburst, 0.04f, 1.52f, 0.50f, 1.12f, 0.78f, 1.46f, 0.56f, 1.24f, 0.64f, 1.50f, 0.52f, 1.08f, 0.82f, 1.36f, 0.60f, 1.28f, 0.70f),
-        shape(BlobShapePreset.Starburst, 0.11f, 1.18f, 0.66f, 1.52f, 0.58f, 1.12f, 0.74f, 1.46f, 0.52f, 1.20f, 0.86f),
-        shape(BlobShapePreset.Starburst, 0.13f, 0.62f, 1.34f, 0.70f, 1.48f, 0.56f, 1.08f, 0.84f, 1.40f, 0.64f, 1.18f, 0.76f, 1.52f),
-
-        shape(BlobShapePreset.Pillow, 0.30f, 1.30f, 1.46f, 1.26f, 0.76f, 0.64f, 0.86f, 1.22f, 1.38f),
-        shape(BlobShapePreset.Pillow, 0.24f, 0.78f, 1.24f, 1.48f, 1.30f, 0.82f, 0.60f, 0.94f, 1.34f, 1.18f, 0.72f),
-        shape(BlobShapePreset.Pillow, 0.18f, 1.46f, 1.24f, 0.70f, 0.60f, 1.22f, 1.50f, 1.16f, 0.68f, 0.82f, 1.30f),
-        shape(BlobShapePreset.Pillow, 0.36f, 1.18f, 1.42f, 1.36f, 1.04f, 0.66f, 0.76f, 1.00f, 1.28f),
-        shape(BlobShapePreset.Pillow, 0.14f, 1.52f, 0.82f, 0.64f, 1.16f, 1.44f, 1.10f, 0.58f, 0.72f, 1.28f, 1.36f, 0.92f, 0.68f),
-
-        shape(BlobShapePreset.Wobble, 0.21f, 1.34f, 0.68f, 0.76f, 1.22f, 1.48f, 0.92f, 0.58f, 1.14f, 1.30f, 0.84f, 1.02f),
-        shape(BlobShapePreset.Wobble, 0.16f, 0.72f, 1.18f, 1.44f, 0.66f, 1.06f, 0.54f, 1.36f, 1.22f, 0.82f, 1.50f, 0.94f, 0.60f),
-        shape(BlobShapePreset.Wobble, 0.27f, 1.08f, 1.40f, 0.82f, 0.64f, 1.26f, 0.72f, 1.50f, 1.18f, 0.58f, 0.96f),
-        shape(BlobShapePreset.Wobble, 0.09f, 1.50f, 0.74f, 1.04f, 1.28f, 0.56f, 1.42f, 0.88f, 0.64f, 1.20f, 1.36f, 0.78f, 1.08f, 0.52f),
-        shape(BlobShapePreset.Wobble, 0.32f, 0.86f, 1.46f, 1.18f, 0.62f, 0.74f, 1.34f, 1.52f, 1.04f, 0.58f, 0.92f, 1.26f),
-    )
+    val shapeLibrary: List<BlobShapeTemplate> = BlobAssetLibrary.templates
 
     fun defaultSoundBlobs(now: Long = System.currentTimeMillis()): List<SoundBlob> {
         val names = listOf(
@@ -167,6 +146,7 @@ object BlobDefaults {
                 shapePreset = shape.first,
                 shapePoints = shape.second,
                 curveTension = shape.curveTension,
+                shapeNodes = shape.nodes,
                 waveform = generatedWaveform(index + 7, 52),
                 trimStartMs = 0,
                 trimEndMs = presetDurationMs(index),
@@ -192,32 +172,110 @@ object BlobDefaults {
             shaped.coerceIn(0.12f, 1f)
         }
     }
+}
 
-    private fun shape(
-        preset: BlobShapePreset,
-        curveTension: Float,
-        vararg points: Float,
-    ): BlobShapeTemplate {
-        return BlobShapeTemplate(
-            preset = preset,
-            points = points.map { it.coerceIn(0.48f, 1.52f) },
-            curveTension = curveTension.coerceIn(0.04f, 0.38f),
+fun SoundBlob.effectiveShapeNodes(): List<BlobShapeNode> {
+    return shapeNodes.takeIf { it.isValidBlobShapeNodes() }
+        ?: shapePoints.toBlobShapeNodes(curveTension)
+}
+
+fun List<BlobShapeNode>.toShapePointMultipliers(): List<Float> {
+    return map { node ->
+        (hypot(node.anchor.x, node.anchor.y) / BLOB_NODE_RADIAL_SCALE)
+            .coerceIn(MIN_SHAPE_POINT_MULTIPLIER, MAX_SHAPE_POINT_MULTIPLIER)
+    }
+}
+
+fun List<Float>.toBlobShapeNodes(
+    curveTension: Float = DEFAULT_BLOB_CURVE_TENSION,
+): List<BlobShapeNode> {
+    val safePoints = takeIf { it.size >= MIN_BLOB_SHAPE_NODES } ?: List(8) { 1f }
+    val anchors = safePoints.mapIndexed { index, multiplier ->
+        val angle = (index.toFloat() / safePoints.size) * PI.toFloat() * 2f - PI.toFloat() / 2f
+        MapPoint(
+            x = cos(angle) * BLOB_NODE_RADIAL_SCALE * multiplier,
+            y = sin(angle) * BLOB_NODE_RADIAL_SCALE * multiplier,
+        )
+    }
+    return autoHandleNodes(anchors, curveTension)
+}
+
+fun autoHandleNodes(
+    anchors: List<MapPoint>,
+    curveTension: Float = DEFAULT_BLOB_CURVE_TENSION,
+): List<BlobShapeNode> {
+    if (anchors.size < MIN_BLOB_SHAPE_NODES) return emptyList()
+    val tension = curveTension.coerceIn(MIN_BLOB_CURVE_TENSION, MAX_BLOB_CURVE_TENSION)
+    return anchors.mapIndexed { index, anchor ->
+        val previous = anchors[(index - 1 + anchors.size) % anchors.size]
+        val next = anchors[(index + 1) % anchors.size]
+        BlobShapeNode(
+            anchor = anchor,
+            inHandle = MapPoint(
+                x = anchor.x - (next.x - previous.x) * tension,
+                y = anchor.y - (next.y - previous.y) * tension,
+            ),
+            outHandle = MapPoint(
+                x = anchor.x + (next.x - previous.x) * tension,
+                y = anchor.y + (next.y - previous.y) * tension,
+            ),
         )
     }
 }
 
+fun List<BlobShapeNode>.sanitizeShapeNodes(fallback: List<BlobShapeNode>): List<BlobShapeNode> {
+    val sanitized = take(MAX_BLOB_SHAPE_NODES).map { node ->
+        BlobShapeNode(
+            anchor = node.anchor.sanitizeShapePoint(),
+            inHandle = node.inHandle.sanitizeShapePoint(),
+            outHandle = node.outHandle.sanitizeShapePoint(),
+        )
+    }
+    return sanitized.takeIf { it.isValidBlobShapeNodes() } ?: fallback
+}
+
+fun List<BlobShapeNode>.isValidBlobShapeNodes(): Boolean {
+    return size in MIN_BLOB_SHAPE_NODES..MAX_BLOB_SHAPE_NODES &&
+        all { node ->
+            node.anchor.isFiniteShapePoint() &&
+                node.inHandle.isFiniteShapePoint() &&
+                node.outHandle.isFiniteShapePoint()
+        }
+}
+
+private fun MapPoint.sanitizeShapePoint(): MapPoint {
+    return MapPoint(
+        x = x.takeIf { it.isFinite() }?.coerceIn(MIN_BLOB_NODE_COORDINATE, MAX_BLOB_NODE_COORDINATE) ?: 0f,
+        y = y.takeIf { it.isFinite() }?.coerceIn(MIN_BLOB_NODE_COORDINATE, MAX_BLOB_NODE_COORDINATE) ?: 0f,
+    )
+}
+
+private fun MapPoint.isFiniteShapePoint(): Boolean {
+    return x.isFinite() && y.isFinite() &&
+        abs(x) <= MAX_BLOB_NODE_COORDINATE &&
+        abs(y) <= MAX_BLOB_NODE_COORDINATE
+}
+
+const val MIN_BLOB_SHAPE_NODES = 5
+const val MAX_BLOB_SHAPE_NODES = 24
+const val BLOB_NODE_RADIAL_SCALE = 0.84f
+const val MIN_SHAPE_POINT_MULTIPLIER = 0.48f
+const val MAX_SHAPE_POINT_MULTIPLIER = 1.52f
+const val MIN_BLOB_CURVE_TENSION = 0.04f
+const val MAX_BLOB_CURVE_TENSION = 0.38f
+const val MIN_BLOB_NODE_COORDINATE = -1.35f
+const val MAX_BLOB_NODE_COORDINATE = 1.35f
+
 object BlobMapLayout {
-    const val FirstRingRadius = 180f
+    const val FirstRingRadius = 142f
     const val RingSpacing = 130f
-    const val MinimumBlobSpacing = 168f
+    const val MinimumBlobSpacing = 126f
 
     fun suggestedPosition(index: Int): MapPoint {
-        val angle = -PI.toFloat() / 2f + index * GOLDEN_ANGLE + ((index % 3) - 1) * 0.12f
-        val radius = 220f + sqrt(index.toFloat()) * 88f + (index % 5) * 18f
-        return MapPoint(
-            x = cos(angle) * radius,
-            y = sin(angle) * radius,
-        )
+        val ring = ringForIndex(index)
+        val slots = slotsForRing(ring)
+        val slot = index - firstIndexInRing(ring)
+        return pointOnRing(ring, slot, slots)
     }
 
     fun arrangedPosition(index: Int): MapPoint {
@@ -311,6 +369,4 @@ object BlobMapLayout {
     }
 
     private fun Int.floorMod(modulus: Int): Int = ((this % modulus) + modulus) % modulus
-
-    private const val GOLDEN_ANGLE = 2.3999631f
 }

@@ -19,7 +19,7 @@ class SoundBlobRepository(context: Context) {
         val raw = preferences.getString(KEY_BLOBS, null) ?: return BlobDefaults.defaultSoundBlobs()
         return runCatching {
             val json = JSONArray(raw)
-            List(json.length()) { index -> json.getJSONObject(index).toSoundBlob() }
+            List(json.length()) { index -> json.getJSONObject(index).toSoundBlob(index) }
         }.getOrElse { BlobDefaults.defaultSoundBlobs() }
     }
 
@@ -50,6 +50,7 @@ class SoundBlobRepository(context: Context) {
             shapePreset = shape.first,
             shapePoints = shape.second,
             curveTension = shape.curveTension,
+            shapeNodes = shape.nodes,
             waveform = waveform.ifEmpty { BlobDefaults.generatedWaveform(existingCount + 19, 64) },
             trimStartMs = 0,
             trimEndMs = durationMs.coerceIn(250, MAX_RECORDING_MS),
@@ -72,6 +73,7 @@ class SoundBlobRepository(context: Context) {
             .put("shapePreset", shapePreset.name)
             .put("shapePoints", JSONArray(shapePoints))
             .put("curveTension", curveTension)
+            .put("shapeNodes", JSONArray(shapeNodes.map { it.toJson() }))
             .put("waveform", JSONArray(waveform))
             .put("trimStartMs", trimStartMs)
             .put("trimEndMs", trimEndMs)
@@ -81,7 +83,7 @@ class SoundBlobRepository(context: Context) {
             .put("builtInTone", builtInTone?.name)
     }
 
-    private fun JSONObject.toSoundBlob(): SoundBlob {
+    private fun JSONObject.toSoundBlob(index: Int): SoundBlob {
         val blobId = getString("id")
         val sourceDurationMs = optInt("sourceDurationMs", optInt("trimEndMs", 1000))
             .coerceAtLeast(MIN_SOUND_DURATION_MS)
@@ -90,19 +92,33 @@ class SoundBlobRepository(context: Context) {
             endMs = optInt("trimEndMs", sourceDurationMs),
             sourceDurationMs = sourceDurationMs,
         )
-        val fallbackShape = BlobDefaults.shapeLibrary.first().second
+        val fallbackTemplate = BlobDefaults.shapeLibrary[index.floorMod(BlobDefaults.shapeLibrary.size)]
+        val fallbackShape = fallbackTemplate.second
+        val curveTension = optDouble("curveTension", DEFAULT_BLOB_CURVE_TENSION.toDouble())
+            .toFloat()
+            .coerceIn(MIN_BLOB_CURVE_TENSION, MAX_BLOB_CURVE_TENSION)
+        val storedShapeNodes = optJSONArray("shapeNodes")?.toShapeNodeList()
+        val shapeNodes = if (storedShapeNodes.isNullOrEmpty()) {
+            fallbackTemplate.nodes
+        } else {
+            storedShapeNodes.sanitizeShapeNodes(fallbackTemplate.nodes)
+        }
+        val shapePoints = if (storedShapeNodes.isNullOrEmpty()) {
+            fallbackTemplate.points
+        } else {
+            optJSONArray("shapePoints")?.toFloatList().orEmpty()
+                .sanitizeShapePoints(shapeNodes.toShapePointMultipliers().ifEmpty { fallbackShape })
+        }
         return SoundBlob(
             id = blobId,
             name = getString("name"),
             createdAtMillis = optLong("createdAtMillis", System.currentTimeMillis()),
             position = MapPoint(optDouble("x", 0.0).toFloat(), optDouble("y", 0.0).toFloat()),
             colorArgb = optLong("colorArgb", BlobDefaults.palette.first()),
-            shapePreset = enumValueOrDefault(optString("shapePreset"), BlobShapePreset.Splash),
-            shapePoints = optJSONArray("shapePoints")?.toFloatList().orEmpty()
-                .sanitizeShapePoints(fallbackShape),
-            curveTension = optDouble("curveTension", DEFAULT_BLOB_CURVE_TENSION.toDouble())
-                .toFloat()
-                .coerceIn(MIN_CURVE_TENSION, MAX_CURVE_TENSION),
+            shapePreset = enumValueOrDefault(optString("shapePreset"), fallbackTemplate.preset),
+            shapePoints = shapePoints,
+            curveTension = curveTension,
+            shapeNodes = shapeNodes,
             waveform = optJSONArray("waveform")?.toFloatList().orEmpty()
                 .sanitizeWaveform(blobId.hashCode()),
             trimStartMs = trim.startMs,
@@ -119,9 +135,42 @@ class SoundBlobRepository(context: Context) {
         return List(length()) { index -> optDouble(index, 0.5).toFloat() }
     }
 
+    private fun BlobShapeNode.toJson(): JSONObject {
+        return JSONObject()
+            .put("anchor", anchor.toJson())
+            .put("inHandle", inHandle.toJson())
+            .put("outHandle", outHandle.toJson())
+    }
+
+    private fun MapPoint.toJson(): JSONObject {
+        return JSONObject()
+            .put("x", x)
+            .put("y", y)
+    }
+
+    private fun JSONArray.toShapeNodeList(): List<BlobShapeNode> {
+        return List(length()) { index ->
+            val item = optJSONObject(index)
+            BlobShapeNode(
+                anchor = item?.optJSONObject("anchor").toMapPoint(),
+                inHandle = item?.optJSONObject("inHandle").toMapPoint(),
+                outHandle = item?.optJSONObject("outHandle").toMapPoint(),
+            )
+        }
+    }
+
+    private fun JSONObject?.toMapPoint(): MapPoint {
+        return MapPoint(
+            x = this?.optDouble("x", 0.0)?.toFloat() ?: 0f,
+            y = this?.optDouble("y", 0.0)?.toFloat() ?: 0f,
+        )
+    }
+
     private fun List<Float>.sanitizeShapePoints(fallback: List<Float>): List<Float> {
-        val points = take(MAX_SHAPE_POINTS).map { it.coerceIn(MIN_SHAPE_POINT, MAX_SHAPE_POINT) }
-        return points.takeIf { it.size >= MIN_SHAPE_POINTS } ?: fallback
+        val points = take(MAX_BLOB_SHAPE_NODES).map {
+            it.coerceIn(MIN_SHAPE_POINT_MULTIPLIER, MAX_SHAPE_POINT_MULTIPLIER)
+        }
+        return points.takeIf { it.size >= MIN_BLOB_SHAPE_NODES } ?: fallback
     }
 
     private fun List<Float>.sanitizeWaveform(seed: Int): List<Float> {
@@ -138,15 +187,13 @@ class SoundBlobRepository(context: Context) {
         return enumValueOrNull<T>(name) ?: fallback
     }
 
+    private fun Int.floorMod(modulus: Int): Int {
+        return ((this % modulus) + modulus) % modulus
+    }
+
     private companion object {
         const val KEY_BLOBS = "blobs"
         const val MAX_RECORDING_MS = 10_000
-        const val MIN_SHAPE_POINTS = 5
-        const val MAX_SHAPE_POINTS = 24
-        const val MIN_SHAPE_POINT = 0.48f
-        const val MAX_SHAPE_POINT = 1.52f
-        const val MIN_CURVE_TENSION = 0.04f
-        const val MAX_CURVE_TENSION = 0.38f
         const val MIN_WAVEFORM_POINT = 0.08f
         const val MAX_WAVEFORM_POINTS = 128
     }

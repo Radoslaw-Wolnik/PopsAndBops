@@ -127,7 +127,7 @@ fun SoundMapScreen(
         }
 
         blobs.forEach { blob ->
-            val scaledSize = with(density) { (108.dp.toPx() * zoom.coerceIn(0.86f, 1.16f)).toDp() }
+            val scaledSize = with(density) { (BlobMapLayout.BlobButtonDiameter.dp.toPx() * zoom).toDp() }
             val dragOffset = dragOffsets[blob.id] ?: Offset.Zero
             val candidatePosition = MapPoint(
                 x = blob.position.x + dragOffset.x,

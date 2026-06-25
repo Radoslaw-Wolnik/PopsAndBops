@@ -11,9 +11,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -217,18 +219,10 @@ fun SoundMapScreen(
         }
 
         if (!isArranging) {
-            val recordSize = with(density) { (86.dp.toPx() * zoom.coerceIn(0.88f, 1.12f)).toDp() }
-            val recordScreen = center + pan
             MapRecordBlob(
                 color = recordColor,
-                modifier = Modifier.offset {
-                    val sizePx = with(density) { recordSize.toPx() }
-                    IntOffset(
-                        x = (recordScreen.x - sizePx / 2f).roundToInt(),
-                        y = (recordScreen.y - sizePx / 2f).roundToInt(),
-                    )
-                },
-                size = recordSize,
+                modifier = Modifier.align(Alignment.Center),
+                size = 96.dp,
                 onClick = onRecordClick,
             )
         }
@@ -327,8 +321,10 @@ fun SoundMapScreen(
                 .align(Alignment.TopStart)
                 .padding(top = 54.dp, start = 18.dp),
             shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+            color = glassContainerColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f),
             tonalElevation = 4.dp,
+            border = BorderStroke(1.dp, glassBorderColor()),
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -359,8 +355,8 @@ private fun MapRecordBlob(
 ) {
     val transition = rememberInfiniteTransition(label = "record blob idle")
     val idleScale by transition.animateFloat(
-        initialValue = 0.98f,
-        targetValue = 1.05f,
+        initialValue = 0.99f,
+        targetValue = 1.025f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 980, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
@@ -437,15 +433,10 @@ private fun MapActionButton(
     onClick: () -> Unit,
 ) {
     val press = rememberPressFeedback(pressedScale = 0.94f)
-    val containerColor = if (emphasized) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
-    }
     val contentColor = if (emphasized) {
         MaterialTheme.colorScheme.onPrimary
     } else {
-        MaterialTheme.colorScheme.onSurface
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f)
     }
     Surface(
         modifier = Modifier
@@ -456,9 +447,10 @@ private fun MapActionButton(
                 onClick = onClick,
             ),
         shape = RoundedCornerShape(24.dp),
-        color = containerColor,
+        color = glassContainerColor(emphasized = emphasized),
         contentColor = contentColor,
         tonalElevation = if (press.isPressed) 7.dp else 4.dp,
+        border = BorderStroke(1.dp, glassBorderColor(emphasized = emphasized)),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -491,8 +483,10 @@ private fun MapToolButton(
                 onClick = onClick,
             ),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        color = glassContainerColor(),
+        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.92f),
         tonalElevation = if (press.isPressed) 7.dp else 4.dp,
+        border = BorderStroke(1.dp, glassBorderColor()),
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -500,6 +494,26 @@ private fun MapToolButton(
         ) {
             icon()
         }
+    }
+}
+
+@Composable
+private fun glassContainerColor(emphasized: Boolean = false): Color {
+    val isDark = isSystemInDarkTheme()
+    return if (emphasized) {
+        MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.92f else 0.88f)
+    } else {
+        MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.78f else 0.72f)
+    }
+}
+
+@Composable
+private fun glassBorderColor(emphasized: Boolean = false): Color {
+    val isDark = isSystemInDarkTheme()
+    return if (emphasized) {
+        MaterialTheme.colorScheme.onPrimary.copy(alpha = if (isDark) 0.20f else 0.26f)
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDark) 0.22f else 0.15f)
     }
 }
 

@@ -7,12 +7,15 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -128,16 +131,23 @@ fun BlobButton(
             }
         }
         if (showName) {
-            Text(
-                text = name,
-                modifier = Modifier.padding(horizontal = 14.dp),
-                color = MaterialTheme.colorScheme.onBackground,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            val labelTextColor = blobLabelTextColor(color)
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = blobLabelContainerColor(color, isPlaying),
+                contentColor = labelTextColor,
+                border = BorderStroke(1.dp, labelTextColor.copy(alpha = 0.12f)),
+            ) {
+                Text(
+                    text = name,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -253,4 +263,25 @@ private fun blobOutlineColor(color: Color): Color {
         blue = (color.blue * 0.72f).coerceIn(0f, 1f),
         alpha = color.alpha,
     )
+}
+
+private fun blobLabelContainerColor(color: Color, isPlaying: Boolean): Color {
+    val alpha = if (isPlaying) 0.30f else 0.22f
+    return if (color.luma() > 0.62f) {
+        Color.Black.copy(alpha = alpha * 0.72f)
+    } else {
+        Color.White.copy(alpha = alpha)
+    }
+}
+
+private fun blobLabelTextColor(color: Color): Color {
+    return if (color.luma() > 0.62f) {
+        Color.White.copy(alpha = 0.92f)
+    } else {
+        Color(0xFF17151F).copy(alpha = 0.88f)
+    }
+}
+
+private fun Color.luma(): Float {
+    return red * 0.299f + green * 0.587f + blue * 0.114f
 }

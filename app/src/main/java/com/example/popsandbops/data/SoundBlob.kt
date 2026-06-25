@@ -268,10 +268,10 @@ const val MIN_BLOB_NODE_COORDINATE = -1.35f
 const val MAX_BLOB_NODE_COORDINATE = 1.35f
 
 object BlobMapLayout {
-    const val BlobButtonDiameter = 108f
+    const val BlobButtonDiameter = 118f
     const val BlobCollisionMargin = 12f
     const val MinimumBlobSpacing = BlobButtonDiameter + BlobCollisionMargin
-    const val FirstRingRadius = 158f
+    const val FirstRingRadius = 170f
     const val RingSpacing = MinimumBlobSpacing
 
     fun suggestedPosition(index: Int): MapPoint {

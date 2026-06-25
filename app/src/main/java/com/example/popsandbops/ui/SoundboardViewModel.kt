@@ -14,6 +14,7 @@ import com.example.popsandbops.data.MapPoint
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.data.SoundBlobRepository
 import com.example.popsandbops.data.sanitizeTrimRange
+import kotlin.math.hypot
 
 class SoundboardViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SoundBlobRepository(application)
@@ -21,11 +22,19 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     private val player = SoundPlayer(application)
     private val handler = Handler(Looper.getMainLooper())
     private var recordingTicker: Runnable? = null
+    private val loadedBlobs = repository.loadBlobs()
+    private val normalizedBlobs = normalizePinnedBlobPositions(loadedBlobs)
     private val _uiState = mutableStateOf(
-        SoundboardUiState(blobs = repository.loadBlobs()),
+        SoundboardUiState(blobs = normalizedBlobs),
     )
 
     val uiState: State<SoundboardUiState> = _uiState
+
+    init {
+        if (normalizedBlobs != loadedBlobs) {
+            repository.saveBlobs(normalizedBlobs)
+        }
+    }
 
     fun showSection(section: SoundboardSection) {
         _uiState.value = _uiState.value.copy(activeSection = section)
@@ -302,6 +311,40 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
             if (blob.id == blobId) transform(blob) else blob
         }
         persist(updated)
+    }
+
+    private fun normalizePinnedBlobPositions(blobs: List<SoundBlob>): List<SoundBlob> {
+        val pinnedBlobs = blobs.filter { it.isPinned }
+        if (!pinnedBlobs.needMoreSpace()) return blobs
+
+        val arrangedPositions = BlobMapLayout.arrangedPositions(pinnedBlobs.size)
+        var pinnedIndex = 0
+        return blobs.map { blob ->
+            if (blob.isPinned) {
+                blob.copy(position = arrangedPositions[pinnedIndex++])
+            } else {
+                blob
+            }
+        }
+    }
+
+    private fun List<SoundBlob>.needMoreSpace(): Boolean {
+        val minimumSpacing = BlobMapLayout.MinimumBlobSpacing * 0.92f
+        forEachIndexed { index, blob ->
+            if (hypot(blob.position.x, blob.position.y) < minimumSpacing) {
+                return true
+            }
+            drop(index + 1).forEach { other ->
+                val distance = hypot(
+                    blob.position.x - other.position.x,
+                    blob.position.y - other.position.y,
+                )
+                if (distance < minimumSpacing) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
     private fun tickRecording() {

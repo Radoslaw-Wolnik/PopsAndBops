@@ -198,11 +198,11 @@ object BlobDefaults {
 object BlobMapLayout {
     const val FirstRingRadius = 180f
     const val RingSpacing = 130f
-    const val MinimumBlobSpacing = 136f
+    const val MinimumBlobSpacing = 168f
 
     fun suggestedPosition(index: Int): MapPoint {
         val angle = -PI.toFloat() / 2f + index * GOLDEN_ANGLE + ((index % 3) - 1) * 0.12f
-        val radius = 172f + sqrt(index.toFloat()) * 76f + (index % 5) * 13f
+        val radius = 220f + sqrt(index.toFloat()) * 88f + (index % 5) * 18f
         return MapPoint(
             x = cos(angle) * radius,
             y = sin(angle) * radius,

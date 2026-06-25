@@ -7,12 +7,12 @@ import kotlin.math.hypot
 
 class BlobMapLayoutTest {
     @Test
-    fun arrangedPositionStartsInTheNearbyField() {
+    fun arrangedPositionStartsOutsideTheRecordButtonField() {
         val position = BlobMapLayout.arrangedPosition(0)
         val distanceFromCenter = hypot(position.x, position.y)
 
-        assertTrue(distanceFromCenter >= BlobMapLayout.FirstRingRadius - 24f)
-        assertTrue(distanceFromCenter <= BlobMapLayout.FirstRingRadius + 24f)
+        assertTrue(distanceFromCenter > BlobMapLayout.MinimumBlobSpacing)
+        assertTrue(distanceFromCenter < BlobMapLayout.MinimumBlobSpacing * 1.5f)
     }
 
     @Test

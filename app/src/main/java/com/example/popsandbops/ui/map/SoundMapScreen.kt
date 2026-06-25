@@ -64,6 +64,7 @@ import com.example.popsandbops.data.BlobDefaults
 import com.example.popsandbops.data.BlobMapLayout
 import com.example.popsandbops.data.MapPoint
 import com.example.popsandbops.data.SoundBlob
+import com.example.popsandbops.data.effectiveShapeNodes
 import com.example.popsandbops.ui.components.BlobButton
 import com.example.popsandbops.ui.components.rememberPressFeedback
 import kotlin.math.hypot
@@ -101,24 +102,19 @@ fun SoundMapScreen(
         modifier = modifier
             .fillMaxSize()
             .background(background)
-            .then(
-                if (isArranging) {
-                    Modifier
-                } else {
-                    Modifier.pointerInput(Unit) {
-                        detectTransformGestures { _, gesturePan, gestureZoom, _ ->
-                            scope.launch {
-                                panState.snapTo(panState.value + gesturePan)
-                                zoomState.snapTo((zoomState.value * gestureZoom).coerceIn(MIN_ZOOM, MAX_ZOOM))
-                            }
-                        }
+            .pointerInput(Unit) {
+                detectTransformGestures { _, gesturePan, gestureZoom, _ ->
+                    scope.launch {
+                        panState.snapTo(panState.value + gesturePan)
+                        zoomState.snapTo((zoomState.value * gestureZoom).coerceIn(MIN_ZOOM, MAX_ZOOM))
                     }
                 }
-            ),
+            },
     ) {
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
         val center = Offset(widthPx / 2f, heightPx / 2f)
+        val worldToPx = with(density) { 1.dp.toPx() } * zoom
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawDottedMap(
@@ -147,7 +143,7 @@ fun SoundMapScreen(
                 candidatePosition
             }
             val worldPosition = Offset(resolvedPosition.x, resolvedPosition.y)
-            val screen = center + pan + Offset(worldPosition.x * zoom, worldPosition.y * zoom)
+            val screen = center + pan + Offset(worldPosition.x * worldToPx, worldPosition.y * worldToPx)
             BlobButton(
                 name = blob.name,
                 color = blob.color,
@@ -156,6 +152,7 @@ fun SoundMapScreen(
                 size = scaledSize,
                 showName = showBlobNames,
                 curveTension = blob.curveTension,
+                nodes = blob.effectiveShapeNodes(),
                 modifier = Modifier
                     .offset {
                         val sizePx = with(density) { scaledSize.toPx() }
@@ -191,7 +188,8 @@ fun SoundMapScreen(
                                     },
                                 ) { change, dragAmount ->
                                     change.consume()
-                                    dragOffsets[blob.id] = (dragOffsets[blob.id] ?: Offset.Zero) + (dragAmount / zoom)
+                                    dragOffsets[blob.id] = (dragOffsets[blob.id] ?: Offset.Zero) +
+                                        (dragAmount / worldToPx)
                                 }
                             }
                         } else {
@@ -372,6 +370,7 @@ private fun MapRecordBlob(
             size = size,
             showName = false,
             curveTension = BlobDefaults.shapeLibrary.first().curveTension,
+            nodes = BlobDefaults.shapeLibrary.first().nodes,
             modifier = Modifier.fillMaxSize(),
             onClick = onClick,
         )
@@ -466,7 +465,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDottedMap(
     fieldColor: Color,
     isArranging: Boolean,
 ) {
-    val spacing = 34f * zoom
+    val spacing = 34.dp.toPx() * zoom
     val origin = center + pan
     val startX = ((origin.x % spacing) + spacing) % spacing
     val startY = ((origin.y % spacing) + spacing) % spacing

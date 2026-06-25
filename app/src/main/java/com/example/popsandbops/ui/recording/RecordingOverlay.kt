@@ -175,6 +175,7 @@ private fun HoldToRecordBlob(
             points = BlobDefaults.shapeLibrary[4].second,
             modifier = Modifier.fillMaxSize(),
             isSelected = isRecording,
+            curveTension = BlobDefaults.shapeLibrary[4].curveTension,
         )
         if (isRecording) {
             Column(
@@ -250,6 +251,7 @@ private fun SaveRecordingBlob(
             color = MaterialTheme.colorScheme.surfaceVariant,
             points = BlobDefaults.shapeLibrary[0].second,
             modifier = Modifier.size(blobSize),
+            curveTension = BlobDefaults.shapeLibrary[0].curveTension,
         )
         Column(
             modifier = Modifier

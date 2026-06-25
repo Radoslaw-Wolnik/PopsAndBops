@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.popsandbops.data.DEFAULT_BLOB_CURVE_TENSION
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -43,6 +44,7 @@ fun BlobButton(
     modifier: Modifier = Modifier,
     size: Dp = 92.dp,
     showName: Boolean = true,
+    curveTension: Float = DEFAULT_BLOB_CURVE_TENSION,
     onClick: () -> Unit,
 ) {
     val press = rememberPressFeedback(pressedScale = 0.88f)
@@ -80,7 +82,7 @@ fun BlobButton(
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val blobPath = smoothBlobPath(size = this.size, points = points)
+            val blobPath = smoothBlobPath(size = this.size, points = points, curveTension = curveTension)
             if (isPlaying) {
                 withTransform({
                     val ringScale = 1f + ringProgress * 0.18f
@@ -134,6 +136,7 @@ fun BlobPreview(
     points: List<Float>,
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
+    curveTension: Float = DEFAULT_BLOB_CURVE_TENSION,
 ) {
     val outlineColor = blobOutlineColor(color)
     var pulse = 1f
@@ -163,7 +166,7 @@ fun BlobPreview(
     }
 
     Canvas(modifier = modifier.scale(pulse)) {
-        val blobPath = smoothBlobPath(size = size, points = points)
+        val blobPath = smoothBlobPath(size = size, points = points, curveTension = curveTension)
         if (isSelected) {
             withTransform({
                 val ringScale = 1f + ringProgress * 0.16f
@@ -185,8 +188,13 @@ fun BlobPreview(
     }
 }
 
-fun smoothBlobPath(size: Size, points: List<Float>): Path {
+fun smoothBlobPath(
+    size: Size,
+    points: List<Float>,
+    curveTension: Float = DEFAULT_BLOB_CURVE_TENSION,
+): Path {
     val safePoints = points.ifEmpty { List(8) { 1f } }
+    val tension = curveTension.coerceIn(0.04f, 0.38f)
     val center = Offset(size.width / 2f, size.height / 2f)
     val radius = minOf(size.width, size.height) * 0.42f
     val anchors = safePoints.mapIndexed { index, multiplier ->
@@ -204,12 +212,12 @@ fun smoothBlobPath(size: Size, points: List<Float>): Path {
         val next = anchors[(index + 1) % anchors.size]
         val afterNext = anchors[(index + 2) % anchors.size]
         val controlOne = Offset(
-            x = anchor.x + (next.x - previous.x) * CURVE_TENSION,
-            y = anchor.y + (next.y - previous.y) * CURVE_TENSION,
+            x = anchor.x + (next.x - previous.x) * tension,
+            y = anchor.y + (next.y - previous.y) * tension,
         )
         val controlTwo = Offset(
-            x = next.x - (afterNext.x - anchor.x) * CURVE_TENSION,
-            y = next.y - (afterNext.y - anchor.y) * CURVE_TENSION,
+            x = next.x - (afterNext.x - anchor.x) * tension,
+            y = next.y - (afterNext.y - anchor.y) * tension,
         )
         path.cubicTo(
             controlOne.x,
@@ -223,8 +231,6 @@ fun smoothBlobPath(size: Size, points: List<Float>): Path {
     path.close()
     return path
 }
-
-private const val CURVE_TENSION = 0.24f
 
 private fun blobOutlineColor(color: Color): Color {
     return Color(

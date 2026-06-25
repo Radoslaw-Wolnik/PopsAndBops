@@ -65,20 +65,25 @@ class SoundBlobTest {
     }
 
     @Test
-    fun shapeLibraryContainsOneHundredVariedOrganicPresets() {
+    fun shapeLibraryContainsTwentyFiveDistinctOrganicPresets() {
         val shapes = BlobDefaults.shapeLibrary
 
-        assertEquals(100, shapes.size)
+        assertEquals(25, shapes.size)
         assertEquals(
             BlobShapePreset.entries.toSet(),
             shapes.map { it.first }.toSet(),
         )
         assertEquals(
             shapes.size,
-            shapes.map { (_, points) -> points.joinToString(separator = ",") { "%.3f".format(it) } }.toSet().size,
+            shapes.map { shape ->
+                shape.points.joinToString(separator = ",") { "%.3f".format(it) } +
+                    ":${"%.3f".format(shape.curveTension)}"
+            }.toSet().size,
         )
-        assertTrue(shapes.all { (_, points) -> points.size in 10..20 })
-        assertTrue(shapes.all { (_, points) -> points.all { it in 0.62f..1.34f } })
+        assertTrue(shapes.all { it.points.size in 8..16 })
+        assertTrue(shapes.all { it.points.all { point -> point in 0.48f..1.52f } })
+        assertTrue(shapes.any { it.curveTension < 0.10f })
+        assertTrue(shapes.any { it.curveTension > 0.30f })
     }
 
     private fun soundBlob(
@@ -95,6 +100,7 @@ class SoundBlobTest {
             colorArgb = BlobDefaults.palette.first(),
             shapePreset = BlobShapePreset.Pebble,
             shapePoints = BlobDefaults.shapeLibrary.first().second,
+            curveTension = BlobDefaults.shapeLibrary.first().curveTension,
             waveform = listOf(0.5f, 0.8f),
             trimStartMs = trimStartMs,
             trimEndMs = trimEndMs,

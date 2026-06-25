@@ -200,11 +200,12 @@ private fun SoundLibraryTile(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 BlobPreview(
-                    color = blob.color,
-                    points = blob.shapePoints,
-                    modifier = Modifier.size(94.dp),
-                    isSelected = isPlaying,
-                )
+                color = blob.color,
+                points = blob.shapePoints,
+                modifier = Modifier.size(94.dp),
+                isSelected = isPlaying,
+                curveTension = blob.curveTension,
+            )
                 Text(
                     text = blob.name,
                     style = MaterialTheme.typography.titleSmall,
@@ -301,6 +302,7 @@ private fun SoundLibraryDetail(
                 points = blob.shapePoints,
                 modifier = Modifier.size(220.dp),
                 isSelected = isPlaying,
+                curveTension = blob.curveTension,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(

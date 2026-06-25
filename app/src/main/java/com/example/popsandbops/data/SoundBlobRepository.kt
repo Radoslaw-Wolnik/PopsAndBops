@@ -49,6 +49,7 @@ class SoundBlobRepository(context: Context) {
             colorArgb = BlobDefaults.palette[existingCount % BlobDefaults.palette.size],
             shapePreset = shape.first,
             shapePoints = shape.second,
+            curveTension = shape.curveTension,
             waveform = waveform.ifEmpty { BlobDefaults.generatedWaveform(existingCount + 19, 64) },
             trimStartMs = 0,
             trimEndMs = durationMs.coerceIn(250, MAX_RECORDING_MS),
@@ -70,6 +71,7 @@ class SoundBlobRepository(context: Context) {
             .put("colorArgb", colorArgb)
             .put("shapePreset", shapePreset.name)
             .put("shapePoints", JSONArray(shapePoints))
+            .put("curveTension", curveTension)
             .put("waveform", JSONArray(waveform))
             .put("trimStartMs", trimStartMs)
             .put("trimEndMs", trimEndMs)
@@ -98,6 +100,9 @@ class SoundBlobRepository(context: Context) {
             shapePreset = enumValueOrDefault(optString("shapePreset"), BlobShapePreset.Splash),
             shapePoints = optJSONArray("shapePoints")?.toFloatList().orEmpty()
                 .sanitizeShapePoints(fallbackShape),
+            curveTension = optDouble("curveTension", DEFAULT_BLOB_CURVE_TENSION.toDouble())
+                .toFloat()
+                .coerceIn(MIN_CURVE_TENSION, MAX_CURVE_TENSION),
             waveform = optJSONArray("waveform")?.toFloatList().orEmpty()
                 .sanitizeWaveform(blobId.hashCode()),
             trimStartMs = trim.startMs,
@@ -138,8 +143,10 @@ class SoundBlobRepository(context: Context) {
         const val MAX_RECORDING_MS = 10_000
         const val MIN_SHAPE_POINTS = 5
         const val MAX_SHAPE_POINTS = 24
-        const val MIN_SHAPE_POINT = 0.58f
-        const val MAX_SHAPE_POINT = 1.36f
+        const val MIN_SHAPE_POINT = 0.48f
+        const val MAX_SHAPE_POINT = 1.52f
+        const val MIN_CURVE_TENSION = 0.04f
+        const val MAX_CURVE_TENSION = 0.38f
         const val MIN_WAVEFORM_POINT = 0.08f
         const val MAX_WAVEFORM_POINTS = 128
     }

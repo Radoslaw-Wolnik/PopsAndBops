@@ -11,6 +11,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 const val MIN_SOUND_DURATION_MS = 250
+const val DEFAULT_BLOB_CURVE_TENSION = 0.18f
 
 enum class BlobShapePreset {
     Splash,
@@ -44,6 +45,18 @@ data class TrimRange(
         get() = endMs - startMs
 }
 
+data class BlobShapeTemplate(
+    val preset: BlobShapePreset,
+    val points: List<Float>,
+    val curveTension: Float,
+) {
+    val first: BlobShapePreset
+        get() = preset
+
+    val second: List<Float>
+        get() = points
+}
+
 data class SoundBlob(
     val id: String,
     val name: String,
@@ -52,6 +65,7 @@ data class SoundBlob(
     val colorArgb: Long,
     val shapePreset: BlobShapePreset,
     val shapePoints: List<Float>,
+    val curveTension: Float = DEFAULT_BLOB_CURVE_TENSION,
     val waveform: List<Float>,
     val trimStartMs: Int,
     val trimEndMs: Int,
@@ -89,8 +103,6 @@ fun sanitizeTrimRange(
 }
 
 object BlobDefaults {
-    private const val SHAPE_PRESET_COUNT = 100
-
     val palette = listOf(
         0xFFFF5A7A, 0xFFFF3366, 0xFFE84855, 0xFFFF6B6B,
         0xFFFF8A3D, 0xFFFF9F1C, 0xFFFFC857, 0xFFFFE066,
@@ -101,8 +113,37 @@ object BlobDefaults {
         0xFF8AC926, 0xFF1982C4, 0xFF6A4C93, 0xFFFFCA3A,
     )
 
-    val shapeLibrary: List<Pair<BlobShapePreset, List<Float>>> =
-        List(SHAPE_PRESET_COUNT) { index -> generatedShapePreset(index) }
+    val shapeLibrary: List<BlobShapeTemplate> = listOf(
+        shape(BlobShapePreset.Splash, 0.15f, 1.42f, 0.70f, 1.18f, 0.82f, 1.36f, 0.64f, 1.08f, 0.88f, 1.30f, 0.76f, 1.16f, 0.92f),
+        shape(BlobShapePreset.Splash, 0.20f, 0.82f, 1.34f, 0.68f, 1.22f, 0.90f, 1.46f, 0.72f, 1.08f, 1.28f, 0.66f, 1.12f),
+        shape(BlobShapePreset.Splash, 0.12f, 1.48f, 0.62f, 1.42f, 0.74f, 1.30f, 0.86f, 1.44f, 0.60f, 1.20f, 0.92f, 1.36f, 0.70f, 1.08f),
+        shape(BlobShapePreset.Splash, 0.25f, 1.20f, 1.42f, 0.72f, 0.80f, 1.28f, 0.66f, 1.44f, 0.88f, 1.10f, 0.58f),
+        shape(BlobShapePreset.Splash, 0.10f, 0.64f, 1.42f, 0.78f, 1.18f, 1.46f, 0.70f, 1.02f, 0.62f, 1.34f, 0.84f, 1.24f, 0.68f, 1.12f, 0.96f),
+
+        shape(BlobShapePreset.Pebble, 0.28f, 1.26f, 1.20f, 1.04f, 0.84f, 0.72f, 0.92f, 1.12f, 1.30f, 1.16f),
+        shape(BlobShapePreset.Pebble, 0.31f, 0.82f, 1.02f, 1.34f, 1.26f, 0.98f, 0.76f, 0.88f, 1.18f, 1.28f, 1.08f),
+        shape(BlobShapePreset.Pebble, 0.22f, 1.40f, 1.14f, 0.92f, 0.68f, 0.86f, 1.04f, 1.22f, 1.34f),
+        shape(BlobShapePreset.Pebble, 0.34f, 0.74f, 0.92f, 1.12f, 1.36f, 1.42f, 1.16f, 0.94f, 0.78f),
+        shape(BlobShapePreset.Pebble, 0.18f, 1.18f, 0.82f, 0.74f, 1.08f, 1.38f, 1.24f, 0.88f, 0.68f, 1.02f, 1.30f),
+
+        shape(BlobShapePreset.Starburst, 0.06f, 1.48f, 0.54f, 1.26f, 0.62f, 1.44f, 0.58f, 1.18f, 0.70f, 1.38f, 0.52f, 1.30f, 0.66f),
+        shape(BlobShapePreset.Starburst, 0.08f, 0.58f, 1.46f, 0.64f, 1.18f, 0.54f, 1.40f, 0.72f, 1.24f, 0.60f, 1.34f, 0.68f, 1.12f, 0.56f, 1.44f),
+        shape(BlobShapePreset.Starburst, 0.04f, 1.52f, 0.50f, 1.12f, 0.78f, 1.46f, 0.56f, 1.24f, 0.64f, 1.50f, 0.52f, 1.08f, 0.82f, 1.36f, 0.60f, 1.28f, 0.70f),
+        shape(BlobShapePreset.Starburst, 0.11f, 1.18f, 0.66f, 1.52f, 0.58f, 1.12f, 0.74f, 1.46f, 0.52f, 1.20f, 0.86f),
+        shape(BlobShapePreset.Starburst, 0.13f, 0.62f, 1.34f, 0.70f, 1.48f, 0.56f, 1.08f, 0.84f, 1.40f, 0.64f, 1.18f, 0.76f, 1.52f),
+
+        shape(BlobShapePreset.Pillow, 0.30f, 1.30f, 1.46f, 1.26f, 0.76f, 0.64f, 0.86f, 1.22f, 1.38f),
+        shape(BlobShapePreset.Pillow, 0.24f, 0.78f, 1.24f, 1.48f, 1.30f, 0.82f, 0.60f, 0.94f, 1.34f, 1.18f, 0.72f),
+        shape(BlobShapePreset.Pillow, 0.18f, 1.46f, 1.24f, 0.70f, 0.60f, 1.22f, 1.50f, 1.16f, 0.68f, 0.82f, 1.30f),
+        shape(BlobShapePreset.Pillow, 0.36f, 1.18f, 1.42f, 1.36f, 1.04f, 0.66f, 0.76f, 1.00f, 1.28f),
+        shape(BlobShapePreset.Pillow, 0.14f, 1.52f, 0.82f, 0.64f, 1.16f, 1.44f, 1.10f, 0.58f, 0.72f, 1.28f, 1.36f, 0.92f, 0.68f),
+
+        shape(BlobShapePreset.Wobble, 0.21f, 1.34f, 0.68f, 0.76f, 1.22f, 1.48f, 0.92f, 0.58f, 1.14f, 1.30f, 0.84f, 1.02f),
+        shape(BlobShapePreset.Wobble, 0.16f, 0.72f, 1.18f, 1.44f, 0.66f, 1.06f, 0.54f, 1.36f, 1.22f, 0.82f, 1.50f, 0.94f, 0.60f),
+        shape(BlobShapePreset.Wobble, 0.27f, 1.08f, 1.40f, 0.82f, 0.64f, 1.26f, 0.72f, 1.50f, 1.18f, 0.58f, 0.96f),
+        shape(BlobShapePreset.Wobble, 0.09f, 1.50f, 0.74f, 1.04f, 1.28f, 0.56f, 1.42f, 0.88f, 0.64f, 1.20f, 1.36f, 0.78f, 1.08f, 0.52f),
+        shape(BlobShapePreset.Wobble, 0.32f, 0.86f, 1.46f, 1.18f, 0.62f, 0.74f, 1.34f, 1.52f, 1.04f, 0.58f, 0.92f, 1.26f),
+    )
 
     fun defaultSoundBlobs(now: Long = System.currentTimeMillis()): List<SoundBlob> {
         val names = listOf(
@@ -125,6 +166,7 @@ object BlobDefaults {
                 colorArgb = palette[index % palette.size],
                 shapePreset = shape.first,
                 shapePoints = shape.second,
+                curveTension = shape.curveTension,
                 waveform = generatedWaveform(index + 7, 52),
                 trimStartMs = 0,
                 trimEndMs = presetDurationMs(index),
@@ -151,48 +193,17 @@ object BlobDefaults {
         }
     }
 
-    private fun generatedShapePreset(index: Int): Pair<BlobShapePreset, List<Float>> {
-        val preset = BlobShapePreset.entries[index % BlobShapePreset.entries.size]
-        return preset to generatedShapePoints(index, preset)
+    private fun shape(
+        preset: BlobShapePreset,
+        curveTension: Float,
+        vararg points: Float,
+    ): BlobShapeTemplate {
+        return BlobShapeTemplate(
+            preset = preset,
+            points = points.map { it.coerceIn(0.48f, 1.52f) },
+            curveTension = curveTension.coerceIn(0.04f, 0.38f),
+        )
     }
-
-    private fun generatedShapePoints(index: Int, preset: BlobShapePreset): List<Float> {
-        val seed = index + 1
-        val count = when (preset) {
-            BlobShapePreset.Splash -> 12 + (seed * 3).floorMod(7)
-            BlobShapePreset.Pebble -> 10 + (seed * 5).floorMod(5)
-            BlobShapePreset.Starburst -> 14 + (seed * 7).floorMod(7)
-            BlobShapePreset.Pillow -> 10 + (seed * 2).floorMod(6)
-            BlobShapePreset.Wobble -> 11 + (seed * 4).floorMod(8)
-        }
-        val slowFrequency = 2 + seed.floorMod(3)
-        val mediumFrequency = 3 + (seed * 2).floorMod(5)
-        val fineFrequency = 5 + (seed * 3).floorMod(5)
-        val phaseOne = seed * 0.71f
-        val phaseTwo = seed * 1.37f
-        val phaseThree = seed * 2.11f
-
-        return List(count) { point ->
-            val angle = point / count.toFloat() * PI.toFloat() * 2f
-            val slow = sin(angle * slowFrequency + phaseOne)
-            val medium = sin(angle * mediumFrequency + phaseTwo)
-            val fine = sin(angle * fineFrequency + phaseThree)
-            val lobe = cos(angle - phaseTwo).coerceAtLeast(0f)
-            val value = when (preset) {
-                BlobShapePreset.Splash -> 1f + slow * 0.13f + medium * 0.16f + fine * 0.06f + lobe * 0.10f
-                BlobShapePreset.Pebble -> 1f + slow * 0.07f + medium * 0.045f + fine * 0.025f
-                BlobShapePreset.Starburst -> {
-                    val alternating = if (point % 2 == 0) 0.18f else -0.15f
-                    1f + alternating + slow * 0.07f + medium * 0.09f + fine * 0.05f
-                }
-                BlobShapePreset.Pillow -> 1f + slow * 0.11f + cos(angle * 4f + phaseThree) * 0.055f
-                BlobShapePreset.Wobble -> 1f + slow * 0.15f + medium * 0.10f + fine * 0.04f - lobe * 0.06f
-            }
-            value.coerceIn(0.62f, 1.34f)
-        }
-    }
-
-    private fun Int.floorMod(modulus: Int): Int = ((this % modulus) + modulus) % modulus
 }
 
 object BlobMapLayout {

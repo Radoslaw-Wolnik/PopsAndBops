@@ -155,6 +155,7 @@ fun SoundMapScreen(
                 isPlaying = playingBlobId == blob.id || isDragging,
                 size = scaledSize,
                 showName = showBlobNames,
+                curveTension = blob.curveTension,
                 modifier = Modifier
                     .offset {
                         val sizePx = with(density) { scaledSize.toPx() }
@@ -370,6 +371,7 @@ private fun MapRecordBlob(
             isPlaying = false,
             size = size,
             showName = false,
+            curveTension = BlobDefaults.shapeLibrary.first().curveTension,
             modifier = Modifier.fillMaxSize(),
             onClick = onClick,
         )

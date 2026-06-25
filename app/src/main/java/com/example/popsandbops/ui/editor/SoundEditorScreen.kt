@@ -1,5 +1,6 @@
 package com.example.popsandbops.ui.editor
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
@@ -27,6 +28,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
@@ -51,9 +54,10 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
@@ -67,10 +71,9 @@ import com.example.popsandbops.data.sanitizeTrimRange
 import com.example.popsandbops.ui.components.BlobPreview
 import com.example.popsandbops.ui.components.rememberPressFeedback
 import com.example.popsandbops.ui.components.WaveformView
-import com.example.popsandbops.ui.components.smoothBlobPath
 import kotlin.math.PI
-import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -87,14 +90,30 @@ fun SoundEditorScreen(
     val backPress = rememberPressFeedback(pressedScale = 0.90f)
     val playPress = rememberPressFeedback(pressedScale = 0.90f)
     val savePress = rememberPressFeedback(pressedScale = 0.94f)
-    val addPointPress = rememberPressFeedback(pressedScale = 0.95f)
-    val removePointPress = rememberPressFeedback(pressedScale = 0.90f)
     var draft by remember(blob.id) { mutableStateOf(blob) }
+    var isEditingShape by remember(blob.id) { mutableStateOf(false) }
     val sourceDurationMs = draft.safeSourceDurationMs
     val trimRange = draft.trimRange
     val hasChanges = draft != blob
     val canSave = draft.name.isNotBlank() && hasChanges
     var selectedShapePoint by remember(blob.id) { mutableIntStateOf(-1) }
+
+    BackHandler(enabled = isEditingShape) {
+        isEditingShape = false
+    }
+
+    if (isEditingShape) {
+        ShapeVectorEditorScreen(
+            points = draft.shapePoints,
+            color = draft.color,
+            selectedPoint = selectedShapePoint,
+            modifier = modifier.fillMaxSize(),
+            onSelectedPointChange = { selectedShapePoint = it },
+            onPointsChange = { draft = draft.copy(shapePoints = it) },
+            onDone = { isEditingShape = false },
+        )
+        return
+    }
 
     Column(
         modifier = modifier
@@ -274,56 +293,32 @@ fun SoundEditorScreen(
                 }
             }
 
-            ShapeEditorCanvas(
-                points = draft.shapePoints,
-                color = draft.color,
-                selectedPoint = selectedShapePoint,
-                onSelectedPointChange = { selectedShapePoint = it },
-                onPointsChange = { draft = draft.copy(shapePoints = it) },
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = {
-                        if (draft.shapePoints.size < MAX_SHAPE_POINTS) {
-                            val insertAt = if (selectedShapePoint in draft.shapePoints.indices) {
-                                selectedShapePoint + 1
-                            } else {
-                                draft.shapePoints.size
-                            }
-                            val next = draft.shapePoints.toMutableList()
-                            val value = if (selectedShapePoint in draft.shapePoints.indices) {
-                                val following = draft.shapePoints[(selectedShapePoint + 1) % draft.shapePoints.size]
-                                (draft.shapePoints[selectedShapePoint] + following) / 2f
-                            } else {
-                                1f
-                            }
-                            next.add(insertAt, value)
-                            selectedShapePoint = insertAt
-                            draft = draft.copy(shapePoints = next)
-                        }
-                    },
-                    enabled = draft.shapePoints.size < MAX_SHAPE_POINTS,
-                    modifier = Modifier.scale(addPointPress.scale),
-                    interactionSource = addPointPress.interactionSource,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Spacer(Modifier.size(8.dp))
-                    Text("Add point")
+                    BlobPreview(
+                        color = draft.color,
+                        points = draft.shapePoints,
+                        modifier = Modifier.size(86.dp),
+                    )
+                    Text(
+                        text = "${draft.shapePoints.size} points",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                    )
                 }
                 Button(
-                    enabled = draft.shapePoints.size > MIN_SHAPE_POINTS && selectedShapePoint in draft.shapePoints.indices,
-                    onClick = {
-                        val next = draft.shapePoints.toMutableList().also { it.removeAt(selectedShapePoint) }
-                        selectedShapePoint = selectedShapePoint.coerceAtMost(next.lastIndex)
-                        draft = draft.copy(shapePoints = next)
-                    },
-                    modifier = Modifier.scale(removePointPress.scale),
-                    interactionSource = removePointPress.interactionSource,
+                    onClick = { isEditingShape = true },
                 ) {
-                    Icon(Icons.Filled.Remove, contentDescription = null)
+                    Icon(Icons.Filled.Edit, contentDescription = null)
                     Spacer(Modifier.size(8.dp))
-                    Text("Remove")
+                    Text("Edit shape")
                 }
             }
         }
@@ -433,10 +428,125 @@ private fun EditorNameField(
 }
 
 @Composable
-private fun ShapeEditorCanvas(
+private fun ShapeVectorEditorScreen(
     points: List<Float>,
     color: Color,
     selectedPoint: Int,
+    modifier: Modifier = Modifier,
+    onSelectedPointChange: (Int) -> Unit,
+    onPointsChange: (List<Float>) -> Unit,
+    onDone: () -> Unit,
+) {
+    val backPress = rememberPressFeedback(pressedScale = 0.90f)
+    val donePress = rememberPressFeedback(pressedScale = 0.94f)
+    val addPointPress = rememberPressFeedback(pressedScale = 0.94f)
+    val removePointPress = rememberPressFeedback(pressedScale = 0.94f)
+
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 18.dp, vertical = 44.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(
+                onClick = onDone,
+                modifier = Modifier.scale(backPress.scale),
+                interactionSource = backPress.interactionSource,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to edit blob")
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Shape",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    text = "${points.size} points",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.58f),
+                )
+            }
+            Button(
+                onClick = onDone,
+                modifier = Modifier.scale(donePress.scale),
+                interactionSource = donePress.interactionSource,
+            ) {
+                Icon(Icons.Filled.Check, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Done")
+            }
+        }
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 1.dp,
+        ) {
+            ShapeVectorCanvas(
+                points = points,
+                color = color,
+                selectedPoint = selectedPoint,
+                modifier = Modifier.fillMaxSize(),
+                onSelectedPointChange = onSelectedPointChange,
+                onPointsChange = onPointsChange,
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Button(
+                onClick = {
+                    val (nextPoints, nextSelection) = addPointPreservingOutline(points, selectedPoint)
+                    onSelectedPointChange(nextSelection)
+                    onPointsChange(nextPoints)
+                },
+                enabled = points.size < MAX_SHAPE_POINTS,
+                modifier = Modifier
+                    .weight(1f)
+                    .scale(addPointPress.scale),
+                interactionSource = addPointPress.interactionSource,
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Add")
+            }
+            Button(
+                onClick = {
+                    val (nextPoints, nextSelection) = removePointPreservingOutline(points, selectedPoint)
+                    onSelectedPointChange(nextSelection)
+                    onPointsChange(nextPoints)
+                },
+                enabled = points.size > MIN_SHAPE_POINTS && selectedPoint in points.indices,
+                modifier = Modifier
+                    .weight(1f)
+                    .scale(removePointPress.scale),
+                interactionSource = removePointPress.interactionSource,
+            ) {
+                Icon(Icons.Filled.Remove, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text("Remove")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShapeVectorCanvas(
+    points: List<Float>,
+    color: Color,
+    selectedPoint: Int,
+    modifier: Modifier = Modifier,
     onSelectedPointChange: (Int) -> Unit,
     onPointsChange: (List<Float>) -> Unit,
 ) {
@@ -444,14 +554,11 @@ private fun ShapeEditorCanvas(
     var activePoint by remember { mutableIntStateOf(-1) }
     val activeHandleColor = MaterialTheme.colorScheme.primary
     val handleBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-    val editorBackground = MaterialTheme.colorScheme.surfaceVariant
+    val guideColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
     val outlineColor = darker(color)
 
     Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(260.dp)
-            .background(editorBackground, RoundedCornerShape(8.dp))
+        modifier = modifier
             .onSizeChanged { canvasSize = it }
             .pointerInput(points, canvasSize) {
                 detectTapGestures { offset ->
@@ -486,28 +593,74 @@ private fun ShapeEditorCanvas(
             },
     ) {
         val safePoints = points.ifEmpty { List(8) { 1f } }
-        val pathSize = Size(size.minDimension * 0.78f, size.minDimension * 0.78f)
-        val path = smoothBlobPath(pathSize, safePoints)
-        val pathOffset = Offset((size.width - pathSize.width) / 2f, (size.height - pathSize.height) / 2f)
         val handles = handleOffsets(size, safePoints)
-        translate(left = pathOffset.x, top = pathOffset.y) {
-            drawPath(path = path, color = color)
-            drawPath(
-                path = path,
-                color = outlineColor.copy(alpha = 0.78f),
-                style = Stroke(width = 3.dp.toPx()),
+        val path = smoothPathFromAnchors(handles)
+        val segments = curveSegments(handles)
+
+        drawVectorGrid(color = guideColor)
+
+        handles.forEach { handle ->
+            drawLine(
+                color = guideColor.copy(alpha = 0.28f),
+                start = center,
+                end = handle,
+                strokeWidth = 1.dp.toPx(),
             )
         }
+        handles.forEachIndexed { index, handle ->
+            drawLine(
+                color = outlineColor.copy(alpha = 0.32f),
+                start = handle,
+                end = handles[(index + 1) % handles.size],
+                strokeWidth = 1.5.dp.toPx(),
+            )
+        }
+
+        drawPath(path = path, color = color.copy(alpha = 0.28f))
+        segments.forEach { segment ->
+            drawLine(
+                color = guideColor.copy(alpha = 0.42f),
+                start = segment.start,
+                end = segment.controlOne,
+                strokeWidth = 1.dp.toPx(),
+            )
+            drawLine(
+                color = guideColor.copy(alpha = 0.42f),
+                start = segment.end,
+                end = segment.controlTwo,
+                strokeWidth = 1.dp.toPx(),
+            )
+            drawCircle(
+                color = guideColor.copy(alpha = 0.50f),
+                radius = 3.dp.toPx(),
+                center = segment.controlOne,
+            )
+            drawCircle(
+                color = guideColor.copy(alpha = 0.50f),
+                radius = 3.dp.toPx(),
+                center = segment.controlTwo,
+            )
+        }
+        drawPath(
+            path = path,
+            color = outlineColor.copy(alpha = 0.92f),
+            style = Stroke(width = 3.5.dp.toPx()),
+        )
+        drawCircle(
+            color = outlineColor.copy(alpha = 0.30f),
+            radius = 4.dp.toPx(),
+            center = center,
+        )
 
         handles.forEachIndexed { index, offset ->
             drawCircle(
                 color = if (index == activePoint || index == selectedPoint) activeHandleColor else Color.White,
-                radius = if (index == selectedPoint) 13.dp.toPx() else 10.dp.toPx(),
+                radius = if (index == selectedPoint) 15.dp.toPx() else 11.dp.toPx(),
                 center = offset,
             )
             drawCircle(
                 color = handleBorderColor,
-                radius = if (index == selectedPoint) 13.dp.toPx() else 10.dp.toPx(),
+                radius = if (index == selectedPoint) 15.dp.toPx() else 11.dp.toPx(),
                 center = offset,
                 style = Stroke(width = 2.dp.toPx()),
             )
@@ -518,7 +671,7 @@ private fun ShapeEditorCanvas(
 private fun handleOffsets(size: Size, points: List<Float>): List<Offset> {
     val safePoints = points.ifEmpty { List(8) { 1f } }
     val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = size.minDimension * 0.31f
+    val radius = shapeEditRadius(size)
     return safePoints.mapIndexed { index, multiplier ->
         val angle = (index.toFloat() / safePoints.size) * PI.toFloat() * 2f - PI.toFloat() / 2f
         Offset(
@@ -532,21 +685,126 @@ private fun nearestHandle(offset: Offset, anchors: List<Offset>): Int? {
     return anchors
         .mapIndexed { index, anchor -> index to hypot(offset.x - anchor.x, offset.y - anchor.y) }
         .minByOrNull { it.second }
-        ?.takeIf { it.second < 54f }
+        ?.takeIf { it.second < 64f }
         ?.first
 }
 
 private fun multiplierFor(offset: Offset, size: IntSize): Float {
     val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = minOf(size.width, size.height) * 0.31f
+    val radius = shapeEditRadius(Size(size.width.toFloat(), size.height.toFloat()))
     return (hypot(offset.x - center.x, offset.y - center.y) / radius).coerceIn(0.58f, 1.36f)
 }
 
-private fun insertionIndex(offset: Offset, size: IntSize, count: Int): Int {
-    val center = Offset(size.width / 2f, size.height / 2f)
-    val angle = atan2(offset.y - center.y, offset.x - center.x)
-    val normalized = (((angle + PI.toFloat() / 2f) + PI.toFloat() * 2f) % (PI.toFloat() * 2f)) / (PI.toFloat() * 2f)
-    return (normalized * count).roundToInt().coerceIn(0, count)
+private fun shapeEditRadius(size: Size): Float {
+    return size.minDimension * 0.34f
+}
+
+private fun DrawScope.drawVectorGrid(color: Color) {
+    val spacing = 32.dp.toPx()
+    var x = spacing / 2f
+    while (x < size.width) {
+        var y = spacing / 2f
+        while (y < size.height) {
+            drawCircle(
+                color = color.copy(alpha = 0.20f),
+                radius = 1.25.dp.toPx(),
+                center = Offset(x, y),
+            )
+            y += spacing
+        }
+        x += spacing
+    }
+}
+
+private data class CurveSegment(
+    val start: Offset,
+    val controlOne: Offset,
+    val controlTwo: Offset,
+    val end: Offset,
+)
+
+private fun smoothPathFromAnchors(anchors: List<Offset>): Path {
+    val path = Path()
+    if (anchors.isEmpty()) return path
+    path.moveTo(anchors.first().x, anchors.first().y)
+    curveSegments(anchors).forEach { segment ->
+        path.cubicTo(
+            segment.controlOne.x,
+            segment.controlOne.y,
+            segment.controlTwo.x,
+            segment.controlTwo.y,
+            segment.end.x,
+            segment.end.y,
+        )
+    }
+    path.close()
+    return path
+}
+
+private fun curveSegments(anchors: List<Offset>): List<CurveSegment> {
+    if (anchors.isEmpty()) return emptyList()
+    return anchors.mapIndexed { index, anchor ->
+        val previous = anchors[(index - 1 + anchors.size) % anchors.size]
+        val next = anchors[(index + 1) % anchors.size]
+        val afterNext = anchors[(index + 2) % anchors.size]
+        CurveSegment(
+            start = anchor,
+            controlOne = Offset(
+                x = anchor.x + (next.x - previous.x) * CURVE_TENSION,
+                y = anchor.y + (next.y - previous.y) * CURVE_TENSION,
+            ),
+            controlTwo = Offset(
+                x = next.x - (afterNext.x - anchor.x) * CURVE_TENSION,
+                y = next.y - (afterNext.y - anchor.y) * CURVE_TENSION,
+            ),
+            end = next,
+        )
+    }
+}
+
+private fun addPointPreservingOutline(points: List<Float>, selectedPoint: Int): Pair<List<Float>, Int> {
+    val safePoints = points.ifEmpty { List(MIN_SHAPE_POINTS) { 1f } }
+    val nextCount = (safePoints.size + 1).coerceAtMost(MAX_SHAPE_POINTS)
+    val nextPoints = resampleShapePoints(safePoints, nextCount)
+    val edgeStart = selectedPoint.takeIf { it in safePoints.indices } ?: safePoints.lastIndex
+    val midpointTurns = (edgeStart + 0.5f) / safePoints.size.toFloat()
+    val nextSelection = (midpointTurns * nextCount).roundToInt().floorMod(nextCount)
+    return nextPoints to nextSelection
+}
+
+private fun removePointPreservingOutline(points: List<Float>, selectedPoint: Int): Pair<List<Float>, Int> {
+    val safePoints = points.ifEmpty { List(MIN_SHAPE_POINTS) { 1f } }
+    val nextCount = (safePoints.size - 1).coerceAtLeast(MIN_SHAPE_POINTS)
+    val nextPoints = resampleShapePoints(safePoints, nextCount)
+    val nextSelection = if (nextPoints.isEmpty()) {
+        -1
+    } else {
+        ((selectedPoint.coerceAtLeast(0) / safePoints.size.toFloat()) * nextCount)
+            .roundToInt()
+            .coerceIn(0, nextPoints.lastIndex)
+    }
+    return nextPoints to nextSelection
+}
+
+private fun resampleShapePoints(points: List<Float>, targetCount: Int): List<Float> {
+    if (points.isEmpty()) return List(targetCount) { 1f }
+    if (points.size == targetCount) return points
+    return List(targetCount) { index ->
+        val oldPosition = index * points.size / targetCount.toFloat()
+        val lowerIndex = floor(oldPosition).toInt().floorMod(points.size)
+        val upperIndex = (lowerIndex + 1).floorMod(points.size)
+        val fraction = oldPosition - floor(oldPosition)
+        lerp(points[lowerIndex], points[upperIndex], fraction)
+            .coerceIn(MIN_SHAPE_MULTIPLIER, MAX_SHAPE_MULTIPLIER)
+    }
+}
+
+private fun lerp(start: Float, end: Float, fraction: Float): Float {
+    return start + (end - start) * fraction
+}
+
+private fun Int.floorMod(modulus: Int): Int {
+    return ((this % modulus) + modulus) % modulus
 }
 
 private fun darker(color: Color): Color {
@@ -560,6 +818,9 @@ private fun darker(color: Color): Color {
 
 private const val MIN_SHAPE_POINTS = 5
 private const val MAX_SHAPE_POINTS = 24
+private const val MIN_SHAPE_MULTIPLIER = 0.58f
+private const val MAX_SHAPE_MULTIPLIER = 1.36f
+private const val CURVE_TENSION = 0.24f
 
 private fun formatMs(ms: Int): String {
     val totalSeconds = (ms / 1_000f).coerceAtLeast(0f)

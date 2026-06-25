@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +21,11 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
@@ -31,9 +35,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +52,9 @@ import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.ui.components.BlobPreview
 import com.example.popsandbops.ui.components.rememberPressFeedback
 import com.example.popsandbops.ui.components.WaveformView
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SoundLibraryScreen(
@@ -68,12 +81,17 @@ fun SoundLibraryScreen(
                 onBackToMap = onBackToMap,
             )
         } else {
+            val selectedIndex = blobs.indexOfFirst { it.id == selectedBlob.id }
+            val previousBlob = blobs.getOrNull(selectedIndex - 1)
+            val nextBlob = blobs.getOrNull(selectedIndex + 1)
             SoundLibraryDetail(
                 blob = selectedBlob,
                 isPlaying = playingBlobId == selectedBlob.id,
                 onBack = onBackToGrid,
                 onPlay = { onPlay(selectedBlob) },
                 onEdit = { onEdit(selectedBlob) },
+                onPrevious = previousBlob?.let { { onSelect(it) } },
+                onNext = nextBlob?.let { { onSelect(it) } },
             )
         }
     }
@@ -165,31 +183,43 @@ private fun SoundLibraryTile(
             },
         ),
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            BlobPreview(
+        Box(modifier = Modifier.fillMaxSize()) {
+            MapStatusChip(
+                isPinned = blob.isPinned,
                 color = blob.color,
-                points = blob.shapePoints,
-                modifier = Modifier.size(94.dp),
-                isSelected = isPlaying,
+                compact = true,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
             )
-            Text(
-                text = blob.name,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = if (blob.isRecorded) "Recording" else "Preset",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
-                maxLines = 1,
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                BlobPreview(
+                    color = blob.color,
+                    points = blob.shapePoints,
+                    modifier = Modifier.size(94.dp),
+                    isSelected = isPlaying,
+                )
+                Text(
+                    text = blob.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = if (blob.isRecorded) "Recording" else "Preset",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -201,17 +231,36 @@ private fun SoundLibraryDetail(
     onBack: () -> Unit,
     onPlay: () -> Unit,
     onEdit: () -> Unit,
+    onPrevious: (() -> Unit)?,
+    onNext: (() -> Unit)?,
 ) {
     val backPress = rememberPressFeedback(pressedScale = 0.90f)
     val playPress = rememberPressFeedback(pressedScale = 0.94f)
     val editPress = rememberPressFeedback(pressedScale = 0.94f)
     val sourceDurationMs = blob.safeSourceDurationMs
     val trimRange = blob.trimRange
+    var swipeDistance by remember(blob.id) { mutableFloatStateOf(0f) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp, vertical = 42.dp),
+            .padding(horizontal = 18.dp, vertical = 42.dp)
+            .pointerInput(blob.id, onPrevious, onNext) {
+                detectHorizontalDragGestures(
+                    onDragStart = { swipeDistance = 0f },
+                    onDragEnd = {
+                        when {
+                            swipeDistance > SWIPE_THRESHOLD_PX && onPrevious != null -> onPrevious()
+                            swipeDistance < -SWIPE_THRESHOLD_PX && onNext != null -> onNext()
+                        }
+                        swipeDistance = 0f
+                    },
+                    onDragCancel = { swipeDistance = 0f },
+                ) { change, dragAmount ->
+                    change.consume()
+                    swipeDistance += dragAmount
+                }
+            },
     ) {
         IconButton(
             onClick = onBack,
@@ -221,6 +270,23 @@ private fun SoundLibraryDetail(
             interactionSource = backPress.interactionSource,
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
+        }
+
+        if (onPrevious != null) {
+            LibraryNavigateButton(
+                icon = Icons.Filled.ChevronLeft,
+                contentDescription = "Previous sound",
+                modifier = Modifier.align(Alignment.CenterStart),
+                onClick = onPrevious,
+            )
+        }
+        if (onNext != null) {
+            LibraryNavigateButton(
+                icon = Icons.Filled.ChevronRight,
+                contentDescription = "Next sound",
+                modifier = Modifier.align(Alignment.CenterEnd),
+                onClick = onNext,
+            )
         }
 
         Column(
@@ -249,6 +315,11 @@ private fun SoundLibraryDetail(
                     text = "${if (blob.isRecorded) "Recording" else "Preset tone"} - ${formatMs(blob.durationMs)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.62f),
+                )
+                Text(
+                    text = "${if (blob.isRecorded) "Recorded" else "Added"} ${formatDateTime(blob.createdAtMillis)}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.54f),
                 )
             }
 
@@ -293,16 +364,9 @@ private fun SoundLibraryDetail(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.GraphicEq,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = blob.color,
-                            )
-                            Text(
-                                text = if (blob.isPinned) "On map" else "Library only",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
+                            MapStatusChip(
+                                isPinned = blob.isPinned,
+                                color = blob.color,
                             )
                         }
                         Text(
@@ -325,7 +389,82 @@ private fun SoundLibraryDetail(
     }
 }
 
+@Composable
+private fun MapStatusChip(
+    isPinned: Boolean,
+    color: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
+    val container = if (isPinned) color.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (isPinned) color else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f)
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = container,
+        contentColor = content,
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = if (compact) 7.dp else 10.dp,
+                vertical = if (compact) 5.dp else 7.dp,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (isPinned) Icons.Filled.Place else Icons.Filled.GraphicEq,
+                contentDescription = if (isPinned) "On map" else "Library only",
+                modifier = Modifier.size(if (compact) 15.dp else 18.dp),
+            )
+            if (!compact) {
+                Text(
+                    text = if (isPinned) "On map" else "Library only",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LibraryNavigateButton(
+    icon: ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val press = rememberPressFeedback(pressedScale = 0.90f)
+    Surface(
+        modifier = modifier
+            .size(42.dp)
+            .scale(press.scale)
+            .clickable(
+                interactionSource = press.interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        tonalElevation = if (press.isPressed) 6.dp else 3.dp,
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = contentDescription)
+        }
+    }
+}
+
 private fun formatMs(ms: Int): String {
     val totalSeconds = (ms / 1_000f).coerceAtLeast(0f)
     return "%.1fs".format(totalSeconds)
 }
+
+private fun formatDateTime(createdAtMillis: Long): String {
+    return SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(Date(createdAtMillis))
+}
+
+private const val SWIPE_THRESHOLD_PX = 90f

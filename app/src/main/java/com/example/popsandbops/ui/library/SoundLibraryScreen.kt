@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.SoundBlob
+import com.example.popsandbops.data.effectiveShapeNodes
 import com.example.popsandbops.ui.components.BlobPreview
 import com.example.popsandbops.ui.components.rememberPressFeedback
 import com.example.popsandbops.ui.components.WaveformView
@@ -200,12 +201,13 @@ private fun SoundLibraryTile(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 BlobPreview(
-                color = blob.color,
-                points = blob.shapePoints,
-                modifier = Modifier.size(94.dp),
-                isSelected = isPlaying,
-                curveTension = blob.curveTension,
-            )
+                    color = blob.color,
+                    points = blob.shapePoints,
+                    modifier = Modifier.size(94.dp),
+                    isSelected = isPlaying,
+                    curveTension = blob.curveTension,
+                    nodes = blob.effectiveShapeNodes(),
+                )
                 Text(
                     text = blob.name,
                     style = MaterialTheme.typography.titleSmall,
@@ -303,6 +305,7 @@ private fun SoundLibraryDetail(
                 modifier = Modifier.size(220.dp),
                 isSelected = isPlaying,
                 curveTension = blob.curveTension,
+                nodes = blob.effectiveShapeNodes(),
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(

@@ -109,14 +109,7 @@ fun PopsAndBopsApp(
                     modifier = Modifier.fillMaxSize(),
                     onClose = viewModel::closeEditor,
                     onPlay = viewModel::previewBlob,
-                    onNameChange = { viewModel.updateBlobName(editingBlob.id, it) },
-                    onPinnedChange = { viewModel.toggleBlobPinned(editingBlob.id, it) },
-                    onColorChange = { viewModel.updateBlobColor(editingBlob.id, it) },
-                    onShapePresetChange = { preset, points ->
-                        viewModel.updateBlobShape(editingBlob.id, preset, points)
-                    },
-                    onShapePointsChange = { viewModel.updateBlobShapePoints(editingBlob.id, it) },
-                    onTrimChange = { start, end -> viewModel.updateBlobTrim(editingBlob.id, start, end) },
+                    onSave = viewModel::saveBlobEdits,
                 )
             } else {
                 when (state.activeSection) {

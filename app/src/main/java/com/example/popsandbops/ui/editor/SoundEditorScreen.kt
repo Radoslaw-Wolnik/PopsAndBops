@@ -62,7 +62,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.example.popsandbops.data.BlobDefaults
-import com.example.popsandbops.data.BlobShapePreset
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.data.sanitizeTrimRange
 import com.example.popsandbops.ui.components.BlobPreview
@@ -83,19 +82,18 @@ fun SoundEditorScreen(
     modifier: Modifier = Modifier,
     onClose: () -> Unit,
     onPlay: (SoundBlob) -> Unit,
-    onNameChange: (String) -> Unit,
-    onPinnedChange: (Boolean) -> Unit,
-    onColorChange: (Long) -> Unit,
-    onShapePresetChange: (BlobShapePreset, List<Float>) -> Unit,
-    onShapePointsChange: (List<Float>) -> Unit,
-    onTrimChange: (Int, Int) -> Unit,
+    onSave: (SoundBlob) -> Unit,
 ) {
     val backPress = rememberPressFeedback(pressedScale = 0.90f)
     val playPress = rememberPressFeedback(pressedScale = 0.90f)
+    val savePress = rememberPressFeedback(pressedScale = 0.94f)
     val addPointPress = rememberPressFeedback(pressedScale = 0.95f)
     val removePointPress = rememberPressFeedback(pressedScale = 0.90f)
-    val sourceDurationMs = blob.safeSourceDurationMs
-    val trimRange = blob.trimRange
+    var draft by remember(blob.id) { mutableStateOf(blob) }
+    val sourceDurationMs = draft.safeSourceDurationMs
+    val trimRange = draft.trimRange
+    val hasChanges = draft != blob
+    val canSave = draft.name.isNotBlank() && hasChanges
     var selectedShapePoint by remember(blob.id) { mutableIntStateOf(-1) }
 
     Column(
@@ -125,17 +123,25 @@ fun SoundEditorScreen(
                     fontWeight = FontWeight.Black,
                 )
                 Text(
-                    text = if (blob.isPinned) "Pinned to map" else "Library only",
+                    text = if (draft.isPinned) "Pinned to map" else "Library only",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.58f),
                 )
             }
             FilledIconButton(
-                onClick = { onPlay(blob) },
+                onClick = { onPlay(draft) },
                 modifier = Modifier.scale(playPress.scale),
                 interactionSource = playPress.interactionSource,
             ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = "Play ${blob.name}")
+                Icon(Icons.Filled.PlayArrow, contentDescription = "Play ${draft.name}")
+            }
+            Button(
+                onClick = { onSave(draft) },
+                enabled = canSave,
+                modifier = Modifier.scale(savePress.scale),
+                interactionSource = savePress.interactionSource,
+            ) {
+                Text("Save")
             }
         }
 
@@ -152,12 +158,12 @@ fun SoundEditorScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 BlobPreview(
-                    color = blob.color,
-                    points = blob.shapePoints,
+                    color = draft.color,
+                    points = draft.shapePoints,
                     modifier = Modifier.size(136.dp),
                 )
                 Text(
-                    text = blob.name,
+                    text = draft.name,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Black,
                     textAlign = TextAlign.Center,
@@ -165,7 +171,7 @@ fun SoundEditorScreen(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${if (blob.isRecorded) "Recording" else "Preset tone"} - ${formatMs(blob.durationMs)}",
+                    text = "${if (draft.isRecorded) "Recording" else "Preset tone"} - ${formatMs(draft.durationMs)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
                 )
@@ -182,8 +188,8 @@ fun SoundEditorScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 EditorNameField(
-                    value = blob.name,
-                    onValueChange = onNameChange,
+                    value = draft.name,
+                    onValueChange = { draft = draft.copy(name = it) },
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -195,7 +201,10 @@ fun SoundEditorScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
-                    Switch(checked = blob.isPinned, onCheckedChange = onPinnedChange)
+                    Switch(
+                        checked = draft.isPinned,
+                        onCheckedChange = { draft = draft.copy(isPinned = it) },
+                    )
                 }
             }
         }
@@ -216,12 +225,12 @@ fun SoundEditorScreen(
                             .clickable(
                                 interactionSource = press.interactionSource,
                                 indication = LocalIndication.current,
-                            ) { onColorChange(colorArgb) },
+                            ) { draft = draft.copy(colorArgb = colorArgb) },
                         shape = CircleShape,
                         color = Color(colorArgb),
                         border = BorderStroke(
-                            width = if (blob.colorArgb == colorArgb) 4.dp else 1.dp,
-                            color = if (blob.colorArgb == colorArgb) MaterialTheme.colorScheme.onSurface else Color.White,
+                            width = if (draft.colorArgb == colorArgb) 4.dp else 1.dp,
+                            color = if (draft.colorArgb == colorArgb) MaterialTheme.colorScheme.onSurface else Color.White,
                         ),
                     ) {}
                 }
@@ -244,17 +253,20 @@ fun SoundEditorScreen(
                             .clickable(
                                 interactionSource = press.interactionSource,
                                 indication = LocalIndication.current,
-                            ) { onShapePresetChange(preset, points) },
+                            ) {
+                                draft = draft.copy(shapePreset = preset, shapePoints = points)
+                                selectedShapePoint = -1
+                            },
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         tonalElevation = if (press.isPressed) 5.dp else 0.dp,
                         border = BorderStroke(
-                            width = if (blob.shapePreset == preset) 3.dp else 1.dp,
-                            color = if (blob.shapePreset == preset) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            width = if (draft.shapePreset == preset) 3.dp else 1.dp,
+                            color = if (draft.shapePreset == preset) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                         ),
                     ) {
                         BlobPreview(
-                            color = blob.color,
+                            color = draft.color,
                             points = points,
                             modifier = Modifier.padding(8.dp),
                         )
@@ -263,35 +275,35 @@ fun SoundEditorScreen(
             }
 
             ShapeEditorCanvas(
-                points = blob.shapePoints,
-                color = blob.color,
+                points = draft.shapePoints,
+                color = draft.color,
                 selectedPoint = selectedShapePoint,
                 onSelectedPointChange = { selectedShapePoint = it },
-                onPointsChange = onShapePointsChange,
+                onPointsChange = { draft = draft.copy(shapePoints = it) },
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = {
-                        if (blob.shapePoints.size < MAX_SHAPE_POINTS) {
-                            val insertAt = if (selectedShapePoint in blob.shapePoints.indices) {
+                        if (draft.shapePoints.size < MAX_SHAPE_POINTS) {
+                            val insertAt = if (selectedShapePoint in draft.shapePoints.indices) {
                                 selectedShapePoint + 1
                             } else {
-                                blob.shapePoints.size
+                                draft.shapePoints.size
                             }
-                            val next = blob.shapePoints.toMutableList()
-                            val value = if (selectedShapePoint in blob.shapePoints.indices) {
-                                val following = blob.shapePoints[(selectedShapePoint + 1) % blob.shapePoints.size]
-                                (blob.shapePoints[selectedShapePoint] + following) / 2f
+                            val next = draft.shapePoints.toMutableList()
+                            val value = if (selectedShapePoint in draft.shapePoints.indices) {
+                                val following = draft.shapePoints[(selectedShapePoint + 1) % draft.shapePoints.size]
+                                (draft.shapePoints[selectedShapePoint] + following) / 2f
                             } else {
                                 1f
                             }
                             next.add(insertAt, value)
                             selectedShapePoint = insertAt
-                            onShapePointsChange(next)
+                            draft = draft.copy(shapePoints = next)
                         }
                     },
-                    enabled = blob.shapePoints.size < MAX_SHAPE_POINTS,
+                    enabled = draft.shapePoints.size < MAX_SHAPE_POINTS,
                     modifier = Modifier.scale(addPointPress.scale),
                     interactionSource = addPointPress.interactionSource,
                 ) {
@@ -300,11 +312,11 @@ fun SoundEditorScreen(
                     Text("Add point")
                 }
                 Button(
-                    enabled = blob.shapePoints.size > MIN_SHAPE_POINTS && selectedShapePoint in blob.shapePoints.indices,
+                    enabled = draft.shapePoints.size > MIN_SHAPE_POINTS && selectedShapePoint in draft.shapePoints.indices,
                     onClick = {
-                        val next = blob.shapePoints.toMutableList().also { it.removeAt(selectedShapePoint) }
+                        val next = draft.shapePoints.toMutableList().also { it.removeAt(selectedShapePoint) }
                         selectedShapePoint = selectedShapePoint.coerceAtMost(next.lastIndex)
-                        onShapePointsChange(next)
+                        draft = draft.copy(shapePoints = next)
                     },
                     modifier = Modifier.scale(removePointPress.scale),
                     interactionSource = removePointPress.interactionSource,
@@ -322,7 +334,7 @@ fun SoundEditorScreen(
                 durationMs = sourceDurationMs,
                 trimStartMs = trimRange.startMs,
                 trimEndMs = trimRange.endMs,
-                activeColor = blob.color,
+                activeColor = draft.color,
             )
             RangeSlider(
                 value = trimRange.startMs.toFloat()..trimRange.endMs.toFloat(),
@@ -332,7 +344,7 @@ fun SoundEditorScreen(
                         endMs = range.endInclusive.roundToInt(),
                         sourceDurationMs = sourceDurationMs,
                     )
-                    onTrimChange(trim.startMs, trim.endMs)
+                    draft = draft.copy(trimStartMs = trim.startMs, trimEndMs = trim.endMs)
                 },
                 valueRange = 0f..sourceDurationMs.toFloat(),
             )

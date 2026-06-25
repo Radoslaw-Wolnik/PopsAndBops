@@ -250,6 +250,27 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
+    fun saveBlobEdits(editedBlob: SoundBlob) {
+        val name = editedBlob.name.trim()
+        if (name.isBlank()) {
+            _uiState.value = _uiState.value.copy(message = "Name the sound before saving")
+            return
+        }
+        updateBlob(editedBlob.id) {
+            val trim = sanitizeTrimRange(
+                startMs = editedBlob.trimStartMs,
+                endMs = editedBlob.trimEndMs,
+                sourceDurationMs = editedBlob.safeSourceDurationMs,
+            )
+            editedBlob.copy(
+                name = name,
+                trimStartMs = trim.startMs,
+                trimEndMs = trim.endMs,
+            )
+        }
+        closeEditor()
+    }
+
     fun updateBlobPosition(blobId: String, position: MapPoint) {
         val occupiedPositions = _uiState.value.blobs
             .filter { it.id != blobId && it.isPinned }

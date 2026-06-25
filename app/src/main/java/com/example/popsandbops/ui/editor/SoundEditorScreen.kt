@@ -1,5 +1,6 @@
 package com.example.popsandbops.ui.editor
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,7 +35,6 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -50,6 +51,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.pointerInput
@@ -138,7 +140,7 @@ fun SoundEditorScreen(
         }
 
         Surface(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
             tonalElevation = 1.dp,
         ) {
@@ -171,7 +173,7 @@ fun SoundEditorScreen(
         }
 
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp,
         ) {
@@ -179,12 +181,9 @@ fun SoundEditorScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                OutlinedTextField(
+                EditorNameField(
                     value = blob.name,
                     onValueChange = onNameChange,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("Name") },
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -220,7 +219,7 @@ fun SoundEditorScreen(
                             ) { onColorChange(colorArgb) },
                         shape = CircleShape,
                         color = Color(colorArgb),
-                        border = androidx.compose.foundation.BorderStroke(
+                        border = BorderStroke(
                             width = if (blob.colorArgb == colorArgb) 4.dp else 1.dp,
                             color = if (blob.colorArgb == colorArgb) MaterialTheme.colorScheme.onSurface else Color.White,
                         ),
@@ -246,10 +245,10 @@ fun SoundEditorScreen(
                                 interactionSource = press.interactionSource,
                                 indication = LocalIndication.current,
                             ) { onShapePresetChange(preset, points) },
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         tonalElevation = if (press.isPressed) 5.dp else 0.dp,
-                        border = androidx.compose.foundation.BorderStroke(
+                        border = BorderStroke(
                             width = if (blob.shapePreset == preset) 3.dp else 1.dp,
                             color = if (blob.shapePreset == preset) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                         ),
@@ -298,9 +297,9 @@ fun SoundEditorScreen(
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null)
                     Spacer(Modifier.size(8.dp))
-                    Text(if (selectedShapePoint in blob.shapePoints.indices) "After selected" else "Point")
+                    Text("Add point")
                 }
-                IconButton(
+                Button(
                     enabled = blob.shapePoints.size > MIN_SHAPE_POINTS && selectedShapePoint in blob.shapePoints.indices,
                     onClick = {
                         val next = blob.shapePoints.toMutableList().also { it.removeAt(selectedShapePoint) }
@@ -310,7 +309,9 @@ fun SoundEditorScreen(
                     modifier = Modifier.scale(removePointPress.scale),
                     interactionSource = removePointPress.interactionSource,
                 ) {
-                    Icon(Icons.Filled.Remove, contentDescription = "Remove selected point")
+                    Icon(Icons.Filled.Remove, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text("Remove")
                 }
             }
         }
@@ -360,7 +361,7 @@ private fun EditorSection(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
     ) {
@@ -379,6 +380,47 @@ private fun EditorSection(
 }
 
 @Composable
+private fun EditorNameField(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(58.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.background.copy(alpha = 0.62f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (value.isBlank()) {
+                Text(
+                    text = "Name",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f),
+                )
+            }
+            BasicTextField(
+                value = value,
+                onValueChange = { onValueChange(it.take(36)) },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.titleMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
 private fun ShapeEditorCanvas(
     points: List<Float>,
     color: Color,
@@ -391,12 +433,13 @@ private fun ShapeEditorCanvas(
     val activeHandleColor = MaterialTheme.colorScheme.primary
     val handleBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
     val editorBackground = MaterialTheme.colorScheme.surfaceVariant
+    val outlineColor = darker(color)
 
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
             .height(260.dp)
-            .background(editorBackground, RoundedCornerShape(20.dp))
+            .background(editorBackground, RoundedCornerShape(8.dp))
             .onSizeChanged { canvasSize = it }
             .pointerInput(points, canvasSize) {
                 detectTapGestures { offset ->
@@ -404,14 +447,9 @@ private fun ShapeEditorCanvas(
                     val handle = nearestHandle(offset, anchors)
                     if (handle != null) {
                         onSelectedPointChange(handle)
-                        return@detectTapGestures
+                    } else {
+                        onSelectedPointChange(-1)
                     }
-                    if (points.size >= MAX_SHAPE_POINTS) return@detectTapGestures
-                    val insertAt = insertionIndex(offset, canvasSize, points.size)
-                    val next = points.toMutableList()
-                    next.add(insertAt, multiplierFor(offset, canvasSize))
-                    onSelectedPointChange(insertAt)
-                    onPointsChange(next)
                 }
             }
             .pointerInput(points, canvasSize) {
@@ -444,7 +482,7 @@ private fun ShapeEditorCanvas(
             drawPath(path = path, color = color)
             drawPath(
                 path = path,
-                color = Color.White.copy(alpha = 0.72f),
+                color = outlineColor.copy(alpha = 0.78f),
                 style = Stroke(width = 3.dp.toPx()),
             )
         }
@@ -452,12 +490,12 @@ private fun ShapeEditorCanvas(
         handles.forEachIndexed { index, offset ->
             drawCircle(
                 color = if (index == activePoint || index == selectedPoint) activeHandleColor else Color.White,
-                radius = if (index == selectedPoint) 11.dp.toPx() else 9.dp.toPx(),
+                radius = if (index == selectedPoint) 13.dp.toPx() else 10.dp.toPx(),
                 center = offset,
             )
             drawCircle(
                 color = handleBorderColor,
-                radius = if (index == selectedPoint) 11.dp.toPx() else 9.dp.toPx(),
+                radius = if (index == selectedPoint) 13.dp.toPx() else 10.dp.toPx(),
                 center = offset,
                 style = Stroke(width = 2.dp.toPx()),
             )
@@ -482,7 +520,7 @@ private fun nearestHandle(offset: Offset, anchors: List<Offset>): Int? {
     return anchors
         .mapIndexed { index, anchor -> index to hypot(offset.x - anchor.x, offset.y - anchor.y) }
         .minByOrNull { it.second }
-        ?.takeIf { it.second < 42f }
+        ?.takeIf { it.second < 54f }
         ?.first
 }
 
@@ -497,6 +535,15 @@ private fun insertionIndex(offset: Offset, size: IntSize, count: Int): Int {
     val angle = atan2(offset.y - center.y, offset.x - center.x)
     val normalized = (((angle + PI.toFloat() / 2f) + PI.toFloat() * 2f) % (PI.toFloat() * 2f)) / (PI.toFloat() * 2f)
     return (normalized * count).roundToInt().coerceIn(0, count)
+}
+
+private fun darker(color: Color): Color {
+    return Color(
+        red = color.red * 0.68f,
+        green = color.green * 0.68f,
+        blue = color.blue * 0.68f,
+        alpha = color.alpha,
+    )
 }
 
 private const val MIN_SHAPE_POINTS = 5

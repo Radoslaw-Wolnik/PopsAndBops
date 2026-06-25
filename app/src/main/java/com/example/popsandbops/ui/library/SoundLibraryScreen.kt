@@ -116,7 +116,7 @@ private fun SoundLibraryGrid(
         }
 
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 116.dp),
+            columns = GridCells.Adaptive(minSize = 138.dp),
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -142,14 +142,14 @@ private fun SoundLibraryTile(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(154.dp)
+            .height(178.dp)
             .scale(press.scale)
             .clickable(
                 interactionSource = press.interactionSource,
                 indication = LocalIndication.current,
                 onClick = onClick,
             ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = when {
             isPlaying -> 7.dp
@@ -173,7 +173,7 @@ private fun SoundLibraryTile(
             BlobPreview(
                 color = blob.color,
                 points = blob.shapePoints,
-                modifier = Modifier.size(72.dp),
+                modifier = Modifier.size(94.dp),
                 isSelected = isPlaying,
             )
             Text(
@@ -203,8 +203,8 @@ private fun SoundLibraryDetail(
     onEdit: () -> Unit,
 ) {
     val backPress = rememberPressFeedback(pressedScale = 0.90f)
-    val editPress = rememberPressFeedback(pressedScale = 0.90f)
     val playPress = rememberPressFeedback(pressedScale = 0.94f)
+    val editPress = rememberPressFeedback(pressedScale = 0.94f)
     val sourceDurationMs = blob.safeSourceDurationMs
     val trimRange = blob.trimRange
 
@@ -223,16 +223,6 @@ private fun SoundLibraryDetail(
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
         }
 
-        FilledIconButton(
-            onClick = onEdit,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .scale(editPress.scale),
-            interactionSource = editPress.interactionSource,
-        ) {
-            Icon(Icons.Filled.Edit, contentDescription = "Edit ${blob.name}")
-        }
-
         Column(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -243,7 +233,7 @@ private fun SoundLibraryDetail(
             BlobPreview(
                 color = blob.color,
                 points = blob.shapePoints,
-                modifier = Modifier.size(190.dp),
+                modifier = Modifier.size(220.dp),
                 isSelected = isPlaying,
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -262,9 +252,31 @@ private fun SoundLibraryDetail(
                 )
             }
 
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilledTonalButton(
+                    onClick = onPlay,
+                    modifier = Modifier.scale(playPress.scale),
+                    interactionSource = playPress.interactionSource,
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Text(text = if (isPlaying) "Playing" else "Play")
+                }
+                FilledTonalButton(
+                    onClick = onEdit,
+                    modifier = Modifier.scale(editPress.scale),
+                    interactionSource = editPress.interactionSource,
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = null)
+                    Text("Edit")
+                }
+            }
+
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 2.dp,
             ) {
@@ -293,14 +305,11 @@ private fun SoundLibraryDetail(
                                 fontWeight = FontWeight.Bold,
                             )
                         }
-                        FilledTonalButton(
-                            onClick = onPlay,
-                            modifier = Modifier.scale(playPress.scale),
-                            interactionSource = playPress.interactionSource,
-                        ) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                            Text(text = if (isPlaying) "Playing" else "Play")
-                        }
+                        Text(
+                            text = formatMs(blob.durationMs),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                        )
                     }
 
                     WaveformView(

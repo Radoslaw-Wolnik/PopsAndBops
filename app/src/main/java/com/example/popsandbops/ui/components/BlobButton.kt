@@ -110,8 +110,8 @@ fun BlobButton(
             }
             drawPath(
                 path = blobPath,
-                color = outlineColor.copy(alpha = if (isPlaying) 0.98f else 0.74f),
-                style = Stroke(width = if (isPlaying) 4.dp.toPx() else 3.dp.toPx()),
+                color = outlineColor.copy(alpha = if (isPlaying) 1f else 0.96f),
+                style = Stroke(width = if (isPlaying) 5.dp.toPx() else 4.dp.toPx()),
             )
             if (isPlaying) {
                 drawPath(
@@ -194,8 +194,8 @@ fun BlobPreview(
         drawPath(path = blobPath, color = color)
         drawPath(
             path = blobPath,
-            color = outlineColor.copy(alpha = if (isSelected) 0.98f else 0.68f),
-            style = Stroke(width = if (isSelected) 4.dp.toPx() else 2.dp.toPx()),
+            color = outlineColor.copy(alpha = if (isSelected) 1f else 0.96f),
+            style = Stroke(width = if (isSelected) 6.dp.toPx() else 4.dp.toPx()),
         )
     }
 }
@@ -242,9 +242,9 @@ private fun com.example.popsandbops.data.MapPoint.toCanvasOffset(center: Offset,
 
 private fun blobOutlineColor(color: Color): Color {
     return Color(
-        red = (color.red * 0.68f).coerceIn(0f, 1f),
-        green = (color.green * 0.68f).coerceIn(0f, 1f),
-        blue = (color.blue * 0.68f).coerceIn(0f, 1f),
+        red = (color.red * 0.72f).coerceIn(0f, 1f),
+        green = (color.green * 0.72f).coerceIn(0f, 1f),
+        blue = (color.blue * 0.72f).coerceIn(0f, 1f),
         alpha = color.alpha,
     )
 }

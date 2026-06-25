@@ -269,7 +269,7 @@ const val MAX_BLOB_NODE_COORDINATE = 1.35f
 
 object BlobMapLayout {
     const val BlobButtonDiameter = 118f
-    const val BlobCollisionMargin = 8f
+    const val BlobCollisionMargin = 4f
     const val MinimumBlobSpacing = BlobButtonDiameter + BlobCollisionMargin
     const val CenterClearRadius = MinimumBlobSpacing
 
@@ -348,8 +348,8 @@ object BlobMapLayout {
     private fun organicCandidate(index: Int, attempt: Int): MapPoint {
         val sequence = index * ORGANIC_CANDIDATE_COUNT + attempt
         val growth = sqrt((index + 1).toFloat())
-        val halfWidth = CenterClearRadius + MinimumBlobSpacing * (1.15f + growth * 0.82f)
-        val halfHeight = CenterClearRadius + MinimumBlobSpacing * (0.92f + growth * 0.68f)
+        val halfWidth = CenterClearRadius + MinimumBlobSpacing * (1.05f + growth * 0.72f)
+        val halfHeight = CenterClearRadius + MinimumBlobSpacing * (0.88f + growth * 0.6f)
         return MapPoint(
             x = organicSignedUnit(sequence, salt = 19) * halfWidth,
             y = organicSignedUnit(sequence, salt = 43) * halfHeight,
@@ -369,12 +369,12 @@ object BlobMapLayout {
         val centerScore = hypot(position.x * 0.82f, position.y * 1.06f)
         val alignmentPenalty = placed.minOfOrNull { placedPosition ->
             val closestAxis = minOf(abs(position.x - placedPosition.x), abs(position.y - placedPosition.y))
-            (24f - closestAxis).coerceAtLeast(0f) * 2.4f
+            (ORGANIC_ALIGNMENT_TOLERANCE - closestAxis).coerceAtLeast(0f) * ORGANIC_ALIGNMENT_PENALTY
         } ?: 0f
         val spacingPreference = placed.minOfOrNull { placedPosition ->
-            abs(distanceBetween(position, placedPosition) - MinimumBlobSpacing * 1.14f)
+            abs(distanceBetween(position, placedPosition) - MinimumBlobSpacing * ORGANIC_PREFERRED_SPACING_MULTIPLIER)
         } ?: 0f
-        return centerScore + alignmentPenalty + spacingPreference * 0.12f
+        return centerScore + alignmentPenalty + spacingPreference * ORGANIC_SPACING_PENALTY
     }
 
     private fun MapPoint.isClearOrganicPosition(placed: List<MapPoint>): Boolean {
@@ -519,6 +519,10 @@ object BlobMapLayout {
 
     private val ANGLE_NUDGE = 12f * (PI.toFloat() / 180f)
     private val GOLDEN_ANGLE = PI.toFloat() * (3f - sqrt(5f))
-    private const val ORGANIC_CANDIDATE_COUNT = 96
+    private const val ORGANIC_PREFERRED_SPACING_MULTIPLIER = 1.02f
+    private const val ORGANIC_SPACING_PENALTY = 0.22f
+    private const val ORGANIC_ALIGNMENT_TOLERANCE = 14f
+    private const val ORGANIC_ALIGNMENT_PENALTY = 1.4f
+    private const val ORGANIC_CANDIDATE_COUNT = 192
     private const val FLOAT_TOLERANCE = 0.001f
 }

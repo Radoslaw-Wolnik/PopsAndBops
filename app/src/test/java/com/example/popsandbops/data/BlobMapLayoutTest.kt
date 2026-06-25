@@ -53,8 +53,20 @@ class BlobMapLayoutTest {
         val positions = BlobMapLayout.arrangedPositions(8)
         val distancesFromCenter = positions.map { hypot(it.x, it.y) }
 
-        assertTrue(distancesFromCenter.all { it < BlobMapLayout.MinimumBlobSpacing * 2.1f })
+        assertTrue(distancesFromCenter.all { it < BlobMapLayout.MinimumBlobSpacing * 1.95f })
         assertEdgeMargins(positions)
+    }
+
+    @Test
+    fun arrangedPositionsKeepNeighborsVisuallyClose() {
+        val positions = BlobMapLayout.arrangedPositions(12)
+        val nearestEdgeGaps = positions.mapIndexed { index, position ->
+            positions
+                .filterIndexed { otherIndex, _ -> otherIndex != index }
+                .minOf { other -> BlobMapLayout.edgeGapBetween(position, other) }
+        }
+
+        assertTrue(nearestEdgeGaps.average() <= BlobMapLayout.BlobCollisionMargin + 20f)
     }
 
     @Test

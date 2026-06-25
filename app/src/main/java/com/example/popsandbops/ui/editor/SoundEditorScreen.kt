@@ -54,11 +54,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
@@ -560,14 +562,15 @@ private fun ColorWheelPicker(
             .pointerInput(Unit) {
                 fun updateFromOffset(offset: Offset, size: Size) {
                     val currentHsv = hsvFromArgb(latestColorArgb)
-                    val geometry = colorPickerGeometry(size)
-                    val center = geometry.center
+                    val baseGeometry = colorPickerGeometry(size, currentHsv[0])
+                    val center = baseGeometry.center
                     val distance = hypot(offset.x - center.x, offset.y - center.y)
-                    val hue = if (distance in geometry.hueInnerRadius..geometry.hueOuterRadius) {
+                    val hue = if (distance in baseGeometry.hueInnerRadius..baseGeometry.hueOuterRadius) {
                         angleDegrees(offset - center)
                     } else {
                         currentHsv[0]
                     }
+                    val geometry = colorPickerGeometry(size, hue)
                     val sv = if (distance < geometry.hueInnerRadius) {
                         saturationValueFromTriangle(offset, geometry, currentHsv)
                     } else {
@@ -584,7 +587,7 @@ private fun ColorWheelPicker(
                 }
             },
     ) {
-        val geometry = colorPickerGeometry(size)
+        val geometry = colorPickerGeometry(size, hsv[0])
         drawHueRing(geometry)
         drawSaturationValueTriangle(geometry, hsv[0])
         drawColorPickerMarkers(geometry, hsv)
@@ -1266,19 +1269,29 @@ private data class BarycentricColor(
     val black: Float,
 )
 
-private fun colorPickerGeometry(size: Size): ColorPickerGeometry {
+private fun colorPickerGeometry(size: Size, hue: Float): ColorPickerGeometry {
     val center = Offset(size.width / 2f, size.height / 2f)
     val hueOuterRadius = size.minDimension * 0.46f
     val hueStrokeWidth = size.minDimension * 0.09f
     val hueInnerRadius = hueOuterRadius - hueStrokeWidth
-    val triangleRadius = hueInnerRadius * 0.78f
+    val triangleRadius = hueInnerRadius - size.minDimension * 0.016f
+    val hueAngle = Math.toRadians(hue.toDouble()).toFloat()
+    val thirdTurn = PI.toFloat() * 2f / 3f
+
+    fun vertex(angle: Float): Offset {
+        return Offset(
+            x = center.x + cos(angle) * triangleRadius,
+            y = center.y + sin(angle) * triangleRadius,
+        )
+    }
+
     return ColorPickerGeometry(
         center = center,
         hueOuterRadius = hueOuterRadius,
         hueInnerRadius = hueInnerRadius,
-        whiteVertex = Offset(center.x - triangleRadius * 0.62f, center.y - triangleRadius * 0.72f),
-        hueVertex = Offset(center.x + triangleRadius * 0.86f, center.y),
-        blackVertex = Offset(center.x - triangleRadius * 0.62f, center.y + triangleRadius * 0.72f),
+        whiteVertex = vertex(hueAngle - thirdTurn),
+        hueVertex = vertex(hueAngle),
+        blackVertex = vertex(hueAngle + thirdTurn),
     )
 }
 
@@ -1306,34 +1319,43 @@ private fun DrawScope.drawSaturationValueTriangle(
     geometry: ColorPickerGeometry,
     hue: Float,
 ) {
-    val minX = minOf(geometry.whiteVertex.x, geometry.hueVertex.x, geometry.blackVertex.x)
-    val maxX = maxOf(geometry.whiteVertex.x, geometry.hueVertex.x, geometry.blackVertex.x)
-    val minY = minOf(geometry.whiteVertex.y, geometry.hueVertex.y, geometry.blackVertex.y)
-    val maxY = maxOf(geometry.whiteVertex.y, geometry.hueVertex.y, geometry.blackVertex.y)
-    val samples = 58
-    val stepX = (maxX - minX) / samples
-    val stepY = (maxY - minY) / samples
-    repeat(samples + 1) { yIndex ->
-        repeat(samples + 1) { xIndex ->
-            val point = Offset(minX + xIndex * stepX, minY + yIndex * stepY)
-            val barycentric = barycentricFor(point, geometry)
-            if (barycentric.white >= -0.02f && barycentric.hue >= -0.02f && barycentric.black >= -0.02f) {
-                val (saturation, value) = saturationValueFromBarycentric(barycentric)
-                drawRect(
-                    color = Color.hsv(hue, saturation, value),
-                    topLeft = Offset(point.x - stepX / 2f, point.y - stepY / 2f),
-                    size = Size(stepX + 1.2f, stepY + 1.2f),
-                )
-            }
-        }
+    val path = trianglePath(geometry)
+    val whiteFadeEnd = projectionOntoLine(
+        point = geometry.whiteVertex,
+        lineStart = geometry.hueVertex,
+        lineEnd = geometry.blackVertex,
+    )
+    val blackFadeEnd = projectionOntoLine(
+        point = geometry.blackVertex,
+        lineStart = geometry.whiteVertex,
+        lineEnd = geometry.hueVertex,
+    )
+
+    clipPath(path) {
+        drawPath(
+            path = path,
+            color = Color.hsv(hue, 1f, 1f),
+        )
+        drawRect(
+            brush = Brush.linearGradient(
+                colors = listOf(Color.White, Color.White.copy(alpha = 0f)),
+                start = geometry.whiteVertex,
+                end = whiteFadeEnd,
+            ),
+            topLeft = Offset.Zero,
+            size = size,
+        )
+        drawRect(
+            brush = Brush.linearGradient(
+                colors = listOf(Color.Black, Color.Black.copy(alpha = 0f)),
+                start = geometry.blackVertex,
+                end = blackFadeEnd,
+            ),
+            topLeft = Offset.Zero,
+            size = size,
+        )
     }
 
-    val path = Path().apply {
-        moveTo(geometry.whiteVertex.x, geometry.whiteVertex.y)
-        lineTo(geometry.hueVertex.x, geometry.hueVertex.y)
-        lineTo(geometry.blackVertex.x, geometry.blackVertex.y)
-        close()
-    }
     drawPath(
         path = path,
         color = Color.Black.copy(alpha = 0.34f),
@@ -1366,6 +1388,32 @@ private fun DrawScope.drawColorPickerMarkers(
             style = Stroke(width = 2.dp.toPx()),
         )
     }
+}
+
+private fun trianglePath(geometry: ColorPickerGeometry): Path {
+    return Path().apply {
+        moveTo(geometry.whiteVertex.x, geometry.whiteVertex.y)
+        lineTo(geometry.hueVertex.x, geometry.hueVertex.y)
+        lineTo(geometry.blackVertex.x, geometry.blackVertex.y)
+        close()
+    }
+}
+
+private fun projectionOntoLine(
+    point: Offset,
+    lineStart: Offset,
+    lineEnd: Offset,
+): Offset {
+    val dx = lineEnd.x - lineStart.x
+    val dy = lineEnd.y - lineStart.y
+    val lengthSquared = dx * dx + dy * dy
+    if (lengthSquared <= 0.001f) return lineStart
+    val fraction = (((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSquared)
+        .coerceIn(0f, 1f)
+    return Offset(
+        x = lineStart.x + dx * fraction,
+        y = lineStart.y + dy * fraction,
+    )
 }
 
 private fun saturationValueFromTriangle(

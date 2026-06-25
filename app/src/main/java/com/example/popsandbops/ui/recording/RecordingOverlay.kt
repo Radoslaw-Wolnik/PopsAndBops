@@ -1,17 +1,28 @@
 package com.example.popsandbops.ui.recording
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -21,15 +32,20 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -105,11 +121,31 @@ private fun HoldToRecordBlob(
     onHoldStart: () -> Unit,
     onHoldEnd: () -> Unit,
 ) {
+    val transition = rememberInfiniteTransition(label = "hold recorder")
+    val idleScale by transition.animateFloat(
+        initialValue = 0.98f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 920, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "hold blob scale",
+    )
+    val ringProgress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "record pulse",
+    )
     val color = MaterialTheme.colorScheme.primary
 
     Box(
         modifier = modifier
-            .size(310.dp)
+            .size(336.dp)
+            .scale(if (isRecording) 1.04f else idleScale)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onPress = {
@@ -124,16 +160,26 @@ private fun HoldToRecordBlob(
             },
         contentAlignment = Alignment.Center,
     ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            if (isRecording) {
+                drawCircle(
+                    color = color.copy(alpha = 0.18f * (1f - ringProgress)),
+                    radius = size.minDimension * (0.38f + ringProgress * 0.18f),
+                    center = center,
+                    style = Stroke(width = 10.dp.toPx()),
+                )
+            }
+        }
         BlobPreview(
             color = color,
-            points = BlobDefaults.shapeLibrary[2].second,
+            points = BlobDefaults.shapeLibrary[4].second,
             modifier = Modifier.fillMaxSize(),
-            isSelected = false,
+            isSelected = isRecording,
         )
         if (isRecording) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 CircularWaveformView(
                     waveform = waveform,
@@ -141,25 +187,38 @@ private fun HoldToRecordBlob(
                     modifier = Modifier.size(188.dp),
                 )
                 Text(
-                    text = "recording ${formatMs(elapsedMs)}",
+                    text = "Recording ${formatMs(elapsedMs)}",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
+                Text(
+                    text = "Lift to save",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f),
+                )
             }
         } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Icon(
                     imageVector = Icons.Filled.FiberManualRecord,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(42.dp),
+                    modifier = Modifier.size(48.dp),
                 )
                 Text(
-                    text = "hold to record",
-                    style = MaterialTheme.typography.labelLarge,
+                    text = "Hold to record",
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimary,
+                )
+                Text(
+                    text = "Short sounds work best",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.74f),
                 )
             }
         }
@@ -180,35 +239,29 @@ private fun SaveRecordingBlob(
     val trimRange = pendingRecording.trimRange
     val canSave = pendingRecording.name.isNotBlank()
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 18.dp),
         contentAlignment = Alignment.Center,
     ) {
+        val blobSize = minOf(maxWidth, 430.dp)
         BlobPreview(
             color = MaterialTheme.colorScheme.surfaceVariant,
-            points = BlobDefaults.shapeLibrary[4].second,
-            modifier = Modifier.size(480.dp),
+            points = BlobDefaults.shapeLibrary[0].second,
+            modifier = Modifier.size(blobSize),
         )
         Column(
             modifier = Modifier
-                .widthIn(max = 340.dp)
+                .widthIn(max = 328.dp)
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
+            RecordingNameField(
                 value = pendingRecording.name,
                 onValueChange = onNameChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Name") },
-                supportingText = {
-                    if (!canSave) {
-                        Text("Required")
-                    }
-                },
+                showRequired = !canSave,
             )
             WaveformView(
                 waveform = pendingRecording.waveform,
@@ -228,6 +281,11 @@ private fun SaveRecordingBlob(
                     onTrimChange(trim.startMs, trim.endMs)
                 },
                 valueRange = 0f..durationMs.toFloat(),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                ),
             )
             Text(
                 text = "${formatMs(trimRange.startMs)} - ${formatMs(trimRange.endMs)}",
@@ -236,17 +294,81 @@ private fun SaveRecordingBlob(
                 textAlign = TextAlign.Center,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onDiscard) {
+                OutlinedButton(
+                    onClick = onDiscard,
+                    shape = RoundedCornerShape(24.dp),
+                ) {
                     Text("Discard")
                 }
                 Button(
                     onClick = onSave,
                     enabled = canSave,
+                    shape = RoundedCornerShape(24.dp),
                 ) {
                     Text("Save")
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RecordingNameField(
+    value: String,
+    showRequired: Boolean,
+    onValueChange: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.background.copy(alpha = 0.62f),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (showRequired) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.52f)
+                } else {
+                    MaterialTheme.colorScheme.outline
+                },
+            ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (value.isBlank()) {
+                    Text(
+                        text = "Name",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f),
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = { onValueChange(it.take(36)) },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        Text(
+            text = if (showRequired) "Required" else " ",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.66f),
+            modifier = Modifier.padding(start = 16.dp),
+        )
     }
 }
 

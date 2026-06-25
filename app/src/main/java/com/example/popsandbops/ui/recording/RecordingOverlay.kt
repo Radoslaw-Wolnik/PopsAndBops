@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -50,7 +50,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.popsandbops.data.BlobDefaults
 import com.example.popsandbops.data.sanitizeTrimRange
 import com.example.popsandbops.ui.PendingRecording
 import com.example.popsandbops.ui.components.BlobPreview
@@ -59,6 +58,42 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
+private val RecordButtonBlobShape = listOf(
+    1.04f,
+    1.17f,
+    1.08f,
+    0.96f,
+    1.13f,
+    1.19f,
+    1.03f,
+    0.95f,
+    1.10f,
+    1.15f,
+    1.01f,
+    0.97f,
+    1.16f,
+    1.07f,
+)
+private const val RecordButtonCurveTension = 0.25f
+
+private val SaveRecordingBlobShape = listOf(
+    0.95f,
+    1.16f,
+    1.19f,
+    1.09f,
+    1.04f,
+    1.13f,
+    1.18f,
+    1.06f,
+    0.99f,
+    1.15f,
+    1.12f,
+    1.05f,
+    1.18f,
+    1.10f,
+)
+private const val SaveRecordingCurveTension = 0.27f
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -172,10 +207,10 @@ private fun HoldToRecordBlob(
         }
         BlobPreview(
             color = color,
-            points = BlobDefaults.shapeLibrary[4].second,
+            points = RecordButtonBlobShape,
             modifier = Modifier.fillMaxSize(),
             isSelected = isRecording,
-            curveTension = BlobDefaults.shapeLibrary[4].curveTension,
+            curveTension = RecordButtonCurveTension,
         )
         if (isRecording) {
             Column(
@@ -243,22 +278,21 @@ private fun SaveRecordingBlob(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         val blobSize = minOf(maxWidth, 430.dp)
+        val contentWidth = minOf(maxWidth * 0.72f, 292.dp)
         BlobPreview(
             color = MaterialTheme.colorScheme.surfaceVariant,
-            points = BlobDefaults.shapeLibrary[0].second,
+            points = SaveRecordingBlobShape,
             modifier = Modifier.size(blobSize),
-            curveTension = BlobDefaults.shapeLibrary[0].curveTension,
+            curveTension = SaveRecordingCurveTension,
         )
         Column(
-            modifier = Modifier
-                .widthIn(max = 328.dp)
-                .padding(20.dp),
+            modifier = Modifier.width(contentWidth),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             RecordingNameField(
                 value = pendingRecording.name,

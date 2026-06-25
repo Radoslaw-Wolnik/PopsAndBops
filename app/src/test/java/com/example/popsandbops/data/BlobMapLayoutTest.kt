@@ -22,7 +22,21 @@ class BlobMapLayoutTest {
         val firstDistanceFromCenter = hypot(firstPosition.x, firstPosition.y)
         val distanceFromCenter = hypot(firstSecondRingPosition.x, firstSecondRingPosition.y)
 
-        assertTrue(distanceFromCenter > firstDistanceFromCenter + BlobMapLayout.MinimumBlobSpacing)
+        assertTrue(distanceFromCenter >= firstDistanceFromCenter + BlobMapLayout.MinimumBlobSpacing)
+    }
+
+    @Test
+    fun firstEightArrangedPositionsStayCompactWithoutOverlapping() {
+        val positions = BlobMapLayout.arrangedPositions(8)
+        val distancesFromCenter = positions.map { hypot(it.x, it.y) }
+
+        assertTrue(distancesFromCenter.all { it < BlobMapLayout.MinimumBlobSpacing * 1.5f })
+        positions.forEachIndexed { index, position ->
+            positions.drop(index + 1).forEach { other ->
+                val distance = hypot(position.x - other.x, position.y - other.y)
+                assertTrue(distance >= BlobMapLayout.MinimumBlobSpacing - FLOAT_TOLERANCE)
+            }
+        }
     }
 
     @Test

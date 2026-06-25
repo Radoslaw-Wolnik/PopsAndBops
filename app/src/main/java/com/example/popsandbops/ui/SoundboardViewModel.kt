@@ -315,7 +315,7 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun normalizePinnedBlobPositions(blobs: List<SoundBlob>): List<SoundBlob> {
         val pinnedBlobs = blobs.filter { it.isPinned }
-        if (!pinnedBlobs.needMoreSpace()) return blobs
+        if (!pinnedBlobs.needMoreSpace() && !pinnedBlobs.areSpreadTooFar()) return blobs
 
         val arrangedPositions = BlobMapLayout.arrangedPositions(pinnedBlobs.size)
         var pinnedIndex = 0
@@ -345,6 +345,14 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
         return false
+    }
+
+    private fun List<SoundBlob>.areSpreadTooFar(): Boolean {
+        if (size <= 1) return false
+        val expectedMaxDistance = BlobMapLayout.arrangedPositions(size)
+            .maxOf { hypot(it.x, it.y) }
+        val currentMaxDistance = maxOf { hypot(it.position.x, it.position.y) }
+        return currentMaxDistance > expectedMaxDistance + BlobMapLayout.MinimumBlobSpacing
     }
 
     private fun tickRecording() {

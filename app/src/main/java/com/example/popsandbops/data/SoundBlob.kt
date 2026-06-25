@@ -267,9 +267,11 @@ const val MIN_BLOB_NODE_COORDINATE = -1.35f
 const val MAX_BLOB_NODE_COORDINATE = 1.35f
 
 object BlobMapLayout {
-    const val FirstRingRadius = 142f
-    const val RingSpacing = 130f
-    const val MinimumBlobSpacing = 126f
+    const val BlobButtonDiameter = 108f
+    const val BlobCollisionMargin = 4f
+    const val MinimumBlobSpacing = BlobButtonDiameter + BlobCollisionMargin
+    const val FirstRingRadius = 148f
+    const val RingSpacing = MinimumBlobSpacing
 
     fun suggestedPosition(index: Int): MapPoint {
         val ring = ringForIndex(index)
@@ -314,7 +316,7 @@ object BlobMapLayout {
     ): MapPoint {
         if (occupiedPositions.isEmpty()) return position
         var resolved = position
-        repeat(10) { pass ->
+        repeat(18) { pass ->
             occupiedPositions.forEachIndexed { index, occupied ->
                 val dx = resolved.x - occupied.x
                 val dy = resolved.y - occupied.y
@@ -325,10 +327,9 @@ object BlobMapLayout {
                     } else {
                         atan2(dy, dx)
                     }
-                    val push = (minimumSpacing - distance).coerceAtMost(minimumSpacing * 0.45f)
                     resolved = MapPoint(
-                        x = resolved.x + cos(angle) * push,
-                        y = resolved.y + sin(angle) * push,
+                        x = occupied.x + cos(angle) * minimumSpacing,
+                        y = occupied.y + sin(angle) * minimumSpacing,
                     )
                 }
             }
@@ -357,7 +358,7 @@ object BlobMapLayout {
         return first
     }
 
-    fun slotsForRing(ring: Int): Int = 6 + ring * 4
+    fun slotsForRing(ring: Int): Int = 8 + ring * 4
 
     private fun pointOnRing(ring: Int, slot: Int, slots: Int): MapPoint {
         val radius = FirstRingRadius + ring * RingSpacing

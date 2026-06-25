@@ -9,6 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlin.math.roundToInt
 
 class SoundBlobRepository(context: Context) {
     private val appContext = context.applicationContext
@@ -20,6 +21,7 @@ class SoundBlobRepository(context: Context) {
         return runCatching {
             val json = JSONArray(raw)
             List(json.length()) { index -> json.getJSONObject(index).toSoundBlob(index) }
+                .diversifyRepeatedPresetShapes()
         }.getOrElse { BlobDefaults.defaultSoundBlobs() }
     }
 
@@ -177,6 +179,47 @@ class SoundBlobRepository(context: Context) {
         return map { it.coerceIn(MIN_WAVEFORM_POINT, 1f) }
             .take(MAX_WAVEFORM_POINTS)
             .ifEmpty { BlobDefaults.generatedWaveform(seed, 52) }
+    }
+
+    private fun List<SoundBlob>.diversifyRepeatedPresetShapes(): List<SoundBlob> {
+        val presetSignatures = BlobDefaults.shapeLibrary
+            .map { it.nodes.shapeSignature() }
+            .toSet()
+        val repeatedPresetSignatures = map { it.effectiveShapeNodes().shapeSignature() }
+            .filter { it in presetSignatures }
+            .groupingBy { it }
+            .eachCount()
+            .filterValues { it > 1 }
+            .keys
+
+        if (repeatedPresetSignatures.isEmpty()) return this
+
+        return mapIndexed { index, blob ->
+            val signature = blob.effectiveShapeNodes().shapeSignature()
+            if (signature in repeatedPresetSignatures) {
+                val shape = BlobDefaults.shapeLibrary[index.floorMod(BlobDefaults.shapeLibrary.size)]
+                blob.copy(
+                    shapePreset = shape.preset,
+                    shapePoints = shape.points,
+                    curveTension = shape.curveTension,
+                    shapeNodes = shape.nodes,
+                )
+            } else {
+                blob
+            }
+        }
+    }
+
+    private fun List<BlobShapeNode>.shapeSignature(): String {
+        return joinToString(separator = "|") { node ->
+            listOf(node.anchor, node.inHandle, node.outHandle).joinToString(separator = ";") { point ->
+                "${point.x.signaturePart()},${point.y.signaturePart()}"
+            }
+        }
+    }
+
+    private fun Float.signaturePart(): Int {
+        return (this * 1_000f).roundToInt()
     }
 
     private inline fun <reified T : Enum<T>> enumValueOrNull(name: String): T? {

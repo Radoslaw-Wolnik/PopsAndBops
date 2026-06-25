@@ -1,16 +1,10 @@
 package com.example.popsandbops.ui.map
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateOffsetAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
@@ -361,37 +355,17 @@ private fun MapRecordBlob(
     size: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
-    val transition = rememberInfiniteTransition(label = "record blob idle")
-    val idleScale by transition.animateFloat(
-        initialValue = 0.99f,
-        targetValue = 1.025f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 980, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "record blob scale",
-    )
-    val ringProgress by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1180, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "record blob ring",
-    )
     val contentColor = MaterialTheme.colorScheme.onPrimary
 
     Box(
         modifier = modifier
-            .size(size)
-            .scale(idleScale),
+            .size(size),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawCircle(
-                color = color.copy(alpha = 0.16f * (1f - ringProgress)),
-                radius = this.size.minDimension * (0.36f + ringProgress * 0.18f),
+                color = color.copy(alpha = 0.10f),
+                radius = this.size.minDimension * 0.52f,
                 center = center,
             )
             drawCircle(

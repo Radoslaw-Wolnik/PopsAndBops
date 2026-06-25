@@ -13,18 +13,20 @@ class BlobMapLayoutTest {
         val position = BlobMapLayout.arrangedPosition(0)
         val distanceFromCenter = hypot(position.x, position.y)
 
-        assertTrue(distanceFromCenter > BlobMapLayout.MinimumBlobSpacing)
-        assertTrue(distanceFromCenter < BlobMapLayout.MinimumBlobSpacing * 1.5f)
+        assertTrue(distanceFromCenter >= BlobMapLayout.CenterClearRadius)
+        assertTrue(distanceFromCenter < BlobMapLayout.MinimumBlobSpacing * 1.2f)
     }
 
     @Test
-    fun arrangedPositionSpreadsLaterBlobsFartherOut() {
-        val firstPosition = BlobMapLayout.arrangedPosition(0)
-        val firstSecondRingPosition = BlobMapLayout.arrangedPosition(BlobMapLayout.slotsForRing(0))
-        val firstDistanceFromCenter = hypot(firstPosition.x, firstPosition.y)
-        val distanceFromCenter = hypot(firstSecondRingPosition.x, firstSecondRingPosition.y)
+    fun arrangedPositionsUseScatteredCellsInsteadOfOneRing() {
+        val positions = BlobMapLayout.arrangedPositions(12)
+        val roundedDistances = positions
+            .map { hypot(it.x, it.y).roundToGrid() }
+            .toSet()
 
-        assertTrue(distanceFromCenter >= firstDistanceFromCenter + BlobMapLayout.MinimumBlobSpacing)
+        assertTrue(roundedDistances.size >= 4)
+        assertTrue(positions.any { abs(it.x) > abs(it.y) * 1.8f })
+        assertTrue(positions.any { abs(it.y) > abs(it.x) * 1.8f })
     }
 
     @Test
@@ -32,7 +34,7 @@ class BlobMapLayoutTest {
         val positions = BlobMapLayout.arrangedPositions(8)
         val distancesFromCenter = positions.map { hypot(it.x, it.y) }
 
-        assertTrue(distancesFromCenter.all { it < BlobMapLayout.MinimumBlobSpacing * 1.5f })
+        assertTrue(distancesFromCenter.all { it < BlobMapLayout.MinimumBlobSpacing * 1.6f })
         assertEdgeMargins(positions)
     }
 
@@ -44,10 +46,13 @@ class BlobMapLayoutTest {
     }
 
     @Test
-    fun snapToArrangeSlotUsesNearestRingSlot() {
-        val snapped = BlobMapLayout.snapToArrangeSlot(MapPoint(12f, -174f))
+    fun snapToArrangeSlotUsesNearestScatterCell() {
+        val target = BlobMapLayout.arrangedPosition(3)
+        val snapped = BlobMapLayout.snapToArrangeSlot(
+            MapPoint(target.x + 18f, target.y - 9f),
+        )
 
-        assertPointEquals(0f, -BlobMapLayout.FirstRingRadius, snapped)
+        assertPointEquals(target.x, target.y, snapped)
     }
 
     @Test
@@ -111,7 +116,7 @@ class BlobMapLayoutTest {
         val radii = BlobMapLayout.guideRadii(maxDistance = 0f)
 
         assertEquals(3, radii.size)
-        assertEquals(BlobMapLayout.FirstRingRadius, radii.first(), FLOAT_TOLERANCE)
+        assertEquals(BlobMapLayout.CenterClearRadius, radii.first(), FLOAT_TOLERANCE)
         assertTrue(radii.zipWithNext().all { (current, next) -> next > current })
     }
 
@@ -127,6 +132,10 @@ class BlobMapLayoutTest {
                 assertTrue(edgeGap >= BlobMapLayout.BlobCollisionMargin - EDGE_TOLERANCE)
             }
         }
+    }
+
+    private fun Float.roundToGrid(): Int {
+        return (this / 10f).toInt()
     }
 
     private companion object {

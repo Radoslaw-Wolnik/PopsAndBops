@@ -269,16 +269,17 @@ const val MAX_BLOB_NODE_COORDINATE = 1.35f
 
 object BlobMapLayout {
     const val BlobButtonDiameter = 118f
-    const val BlobCollisionMargin = 12f
+    const val BlobCollisionMargin = 8f
     const val MinimumBlobSpacing = BlobButtonDiameter + BlobCollisionMargin
-    const val FirstRingRadius = 170f
-    const val RingSpacing = MinimumBlobSpacing
+    const val CenterClearRadius = MinimumBlobSpacing
+    const val ScatterCellSpacing = MinimumBlobSpacing + 10f
 
     fun suggestedPosition(index: Int): MapPoint {
-        val ring = ringForIndex(index)
-        val slots = slotsForRing(ring)
-        val slot = index - firstIndexInRing(ring)
-        return pointOnRing(ring, slot, slots)
+        val cell = scatterCell(index)
+        return MapPoint(
+            x = cell.x * ScatterCellSpacing + scatterJitter(index, salt = 11),
+            y = cell.y * ScatterCellSpacing + scatterJitter(index, salt = 17),
+        )
     }
 
     fun arrangedPosition(index: Int): MapPoint {
@@ -298,16 +299,9 @@ object BlobMapLayout {
     }
 
     fun snapToArrangeSlot(position: MapPoint): MapPoint {
-        val distance = hypot(position.x, position.y)
-        val ring = ((distance - FirstRingRadius) / RingSpacing)
-            .roundToInt()
-            .coerceAtLeast(0)
-        val slots = slotsForRing(ring)
-        val angle = atan2(position.y, position.x)
-        val normalized = (((angle + PI.toFloat() / 2f) + PI.toFloat() * 2f) % (PI.toFloat() * 2f)) /
-            (PI.toFloat() * 2f)
-        val slot = (normalized * slots).roundToInt().floorMod(slots)
-        return pointOnRing(ring, slot, slots)
+        return scatterCandidates(maxCount = 160)
+            .minByOrNull { it.distanceSquaredTo(position) }
+            ?: suggestedPosition(0)
     }
 
     fun edgeGapBetween(first: MapPoint, second: MapPoint): Float {
@@ -342,35 +336,58 @@ object BlobMapLayout {
     }
 
     fun guideRadii(maxDistance: Float): List<Float> {
-        val ringCount = (((maxDistance - FirstRingRadius) / RingSpacing).roundToInt() + 2).coerceAtLeast(3)
-        return List(ringCount) { ring -> FirstRingRadius + ring * RingSpacing }
+        val guideCount = ((maxDistance / ScatterCellSpacing).roundToInt() + 3).coerceAtLeast(3)
+        return List(guideCount) { guide -> CenterClearRadius + guide * ScatterCellSpacing }
     }
 
-    private fun ringForIndex(index: Int): Int {
+    private data class ScatterCell(
+        val x: Int,
+        val y: Int,
+    )
+
+    private fun scatterCell(index: Int): ScatterCell {
         var remaining = index
-        var ring = 0
-        while (remaining >= slotsForRing(ring)) {
-            remaining -= slotsForRing(ring)
-            ring += 1
+        var shell = 1
+        while (true) {
+            val shellCells = scatterShell(shell)
+            if (remaining < shellCells.size) return shellCells[remaining]
+            remaining -= shellCells.size
+            shell += 1
         }
-        return ring
     }
 
-    private fun firstIndexInRing(ring: Int): Int {
-        var first = 0
-        repeat(ring) { first += slotsForRing(it) }
-        return first
+    private fun scatterCandidates(maxCount: Int): List<MapPoint> {
+        return List(maxCount.coerceAtLeast(0)) { index -> suggestedPosition(index) }
     }
 
-    fun slotsForRing(ring: Int): Int = 8 + ring * 4
-
-    private fun pointOnRing(ring: Int, slot: Int, slots: Int): MapPoint {
-        val radius = FirstRingRadius + ring * RingSpacing
-        val angle = (slot / slots.toFloat()) * PI.toFloat() * 2f - PI.toFloat() / 2f
-        return MapPoint(
-            x = cos(angle) * radius,
-            y = sin(angle) * radius,
+    private fun scatterShell(shell: Int): List<ScatterCell> {
+        val cells = mutableListOf<ScatterCell>()
+        for (y in -shell..shell) {
+            for (x in -shell..shell) {
+                if (max(abs(x), abs(y)) == shell) {
+                    cells += ScatterCell(x, y)
+                }
+            }
+        }
+        return cells.sortedWith(
+            compareBy<ScatterCell> { scatterBandScore(it) }
+                .thenBy { scatterOrder(it) },
         )
+    }
+
+    private fun scatterBandScore(cell: ScatterCell): Float {
+        val wideScreenBias = max(abs(cell.x) / 3f, abs(cell.y) / 2f)
+        val distanceBias = (abs(cell.x) + abs(cell.y)) * 0.04f
+        return wideScreenBias + distanceBias
+    }
+
+    private fun scatterOrder(cell: ScatterCell): Int {
+        return (cell.x * 73 + cell.y * 37 + 10_000).floorMod(997)
+    }
+
+    private fun scatterJitter(index: Int, salt: Int): Float {
+        val bucket = ((index + 1) * salt + index * index * 3).floorMod(17) - 8
+        return bucket * 0.5f
     }
 
     private fun Int.floorMod(modulus: Int): Int = ((this % modulus) + modulus) % modulus

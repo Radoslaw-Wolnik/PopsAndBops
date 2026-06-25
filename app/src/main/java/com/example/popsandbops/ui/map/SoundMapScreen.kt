@@ -219,10 +219,18 @@ fun SoundMapScreen(
         }
 
         if (!isArranging) {
+            val recordSize = 96.dp
+            val recordScreen = center + pan
             MapRecordBlob(
                 color = recordColor,
-                modifier = Modifier.align(Alignment.Center),
-                size = 96.dp,
+                modifier = Modifier.offset {
+                    val sizePx = with(density) { recordSize.toPx() }
+                    IntOffset(
+                        x = (recordScreen.x - sizePx / 2f).roundToInt(),
+                        y = (recordScreen.y - sizePx / 2f).roundToInt(),
+                    )
+                },
+                size = recordSize,
                 onClick = onRecordClick,
             )
         }

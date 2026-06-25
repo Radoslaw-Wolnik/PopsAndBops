@@ -3,7 +3,9 @@ package com.example.popsandbops.data
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.sqrt
 
 class BlobMapLayoutTest {
     @Test
@@ -31,12 +33,14 @@ class BlobMapLayoutTest {
         val distancesFromCenter = positions.map { hypot(it.x, it.y) }
 
         assertTrue(distancesFromCenter.all { it < BlobMapLayout.MinimumBlobSpacing * 1.5f })
-        positions.forEachIndexed { index, position ->
-            positions.drop(index + 1).forEach { other ->
-                val distance = hypot(position.x - other.x, position.y - other.y)
-                assertTrue(distance >= BlobMapLayout.MinimumBlobSpacing - FLOAT_TOLERANCE)
-            }
-        }
+        assertEdgeMargins(positions)
+    }
+
+    @Test
+    fun arrangedPositionsKeepButtonEdgesApartForDenseScatter() {
+        val positions = BlobMapLayout.arrangedPositions(28)
+
+        assertEdgeMargins(positions)
     }
 
     @Test
@@ -64,9 +68,42 @@ class BlobMapLayoutTest {
             position = MapPoint(100f, 100f),
             occupiedPositions = listOf(occupied),
         )
-        val distance = hypot(resolved.x - occupied.x, resolved.y - occupied.y)
 
-        assertTrue(distance >= BlobMapLayout.MinimumBlobSpacing - FLOAT_TOLERANCE)
+        assertTrue(BlobMapLayout.hasClearEdges(resolved, listOf(occupied)))
+    }
+
+    @Test
+    fun resolveOverlapsUsesNearestClearPositionBetweenTwoButtons() {
+        val spacing = BlobMapLayout.MinimumBlobSpacing
+        val occupied = listOf(
+            MapPoint(0f, 0f),
+            MapPoint(spacing, 0f),
+        )
+        val resolved = BlobMapLayout.resolveOverlaps(
+            position = MapPoint(spacing / 2f, 0f),
+            occupiedPositions = occupied,
+        )
+        val expectedY = sqrt(spacing * spacing - (spacing / 2f) * (spacing / 2f))
+
+        assertEquals(spacing / 2f, resolved.x, EDGE_TOLERANCE)
+        assertEquals(expectedY, abs(resolved.y), EDGE_TOLERANCE)
+        assertTrue(BlobMapLayout.hasClearEdges(resolved, occupied))
+    }
+
+    @Test
+    fun edgeGapBetweenMeasuresButtonEdgesNotJustCenters() {
+        val first = MapPoint(0f, 0f)
+        val second = MapPoint(
+            x = BlobMapLayout.BlobButtonDiameter + BlobMapLayout.BlobCollisionMargin,
+            y = 0f,
+        )
+
+        assertEquals(
+            BlobMapLayout.BlobCollisionMargin,
+            BlobMapLayout.edgeGapBetween(first, second),
+            FLOAT_TOLERANCE,
+        )
+        assertTrue(BlobMapLayout.hasClearEdges(first, listOf(second)))
     }
 
     @Test
@@ -83,7 +120,17 @@ class BlobMapLayoutTest {
         assertEquals(expectedY, actual.y, FLOAT_TOLERANCE)
     }
 
+    private fun assertEdgeMargins(positions: List<MapPoint>) {
+        positions.forEachIndexed { index, position ->
+            positions.drop(index + 1).forEach { other ->
+                val edgeGap = BlobMapLayout.edgeGapBetween(position, other)
+                assertTrue(edgeGap >= BlobMapLayout.BlobCollisionMargin - EDGE_TOLERANCE)
+            }
+        }
+    }
+
     private companion object {
         const val FLOAT_TOLERANCE = 0.001f
+        const val EDGE_TOLERANCE = 0.02f
     }
 }

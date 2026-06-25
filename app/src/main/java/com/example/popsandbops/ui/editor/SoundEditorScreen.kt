@@ -794,20 +794,32 @@ private fun ShapeVectorCanvas(
         modifier = modifier
             .onSizeChanged { canvasSize = it }
             .pointerInput(canvasSize) {
-                detectTapGestures { offset ->
-                    val target = nearestShapeTarget(
-                        offset = offset,
-                        nodes = latestNodes,
-                        size = Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()),
-                        selectedPoint = latestSelectedPoint,
-                        radius = SELECT_HANDLE_RADIUS_PX,
-                    )
-                    if (target != null) {
-                        onSelectedPointChange(target.index)
-                    } else {
-                        onSelectedPointChange(-1)
-                    }
-                }
+                detectTapGestures(
+                    onDoubleTap = { offset ->
+                        addPointPreservingOutlineAtOffset(
+                            nodes = latestNodes,
+                            offset = offset,
+                            size = Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()),
+                        )?.let { (nextPoints, nextSelection) ->
+                            onSelectedPointChange(nextSelection)
+                            onNodesChange(nextPoints)
+                        }
+                    },
+                    onTap = { offset ->
+                        val target = nearestShapeTarget(
+                            offset = offset,
+                            nodes = latestNodes,
+                            size = Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()),
+                            selectedPoint = latestSelectedPoint,
+                            radius = SELECT_HANDLE_RADIUS_PX,
+                        )
+                        if (target != null) {
+                            onSelectedPointChange(target.index)
+                        } else {
+                            onSelectedPointChange(-1)
+                        }
+                    },
+                )
             }
             .pointerInput(canvasSize) {
                 detectDragGestures(
@@ -1037,6 +1049,18 @@ private data class ShapeDragTarget(
     val handle: ShapeHandle,
 )
 
+private data class CurveInsertTarget(
+    val segmentIndex: Int,
+    val fraction: Float,
+    val distance: Float,
+)
+
+private data class CurveSplit(
+    val startOutHandle: MapPoint,
+    val insertedNode: BlobShapeNode,
+    val endInHandle: MapPoint,
+)
+
 private fun List<BlobShapeNode>.toCanvasNodes(size: Size): List<CanvasShapeNode> {
     return map { node ->
         CanvasShapeNode(
@@ -1181,31 +1205,112 @@ private fun addPointPreservingOutline(
 ): Pair<List<BlobShapeNode>, Int> {
     val safeNodes = nodes.takeIf { it.isValidBlobShapeNodes() } ?: List(8) { 1f }.toBlobShapeNodes()
     val startIndex = selectedPoint.takeIf { it in safeNodes.indices } ?: safeNodes.lastIndex
-    val endIndex = (startIndex + 1).floorMod(safeNodes.size)
-    val start = safeNodes[startIndex]
-    val end = safeNodes[endIndex]
+    return splitSegmentPreservingOutline(safeNodes, startIndex, 0.5f)
+}
 
-    val p01 = start.anchor.lerp(start.outHandle, 0.5f)
-    val p12 = start.outHandle.lerp(end.inHandle, 0.5f)
-    val p23 = end.inHandle.lerp(end.anchor, 0.5f)
-    val p012 = p01.lerp(p12, 0.5f)
-    val p123 = p12.lerp(p23, 0.5f)
-    val midpoint = p012.lerp(p123, 0.5f)
+private fun addPointPreservingOutlineAtOffset(
+    nodes: List<BlobShapeNode>,
+    offset: Offset,
+    size: Size,
+): Pair<List<BlobShapeNode>, Int>? {
+    if (nodes.size >= MAX_BLOB_SHAPE_NODES) return null
+    val safeNodes = nodes.takeIf { it.isValidBlobShapeNodes() } ?: List(8) { 1f }.toBlobShapeNodes()
+    val target = nearestCurveInsertTarget(
+        offset = offset,
+        nodes = safeNodes,
+        size = size,
+        radius = CURVE_INSERT_RADIUS_PX,
+    ) ?: return null
+    return splitSegmentPreservingOutline(safeNodes, target.segmentIndex, target.fraction)
+}
 
-    val next = safeNodes.toMutableList()
-    next[startIndex] = start.copy(outHandle = p01)
+private fun nearestCurveInsertTarget(
+    offset: Offset,
+    nodes: List<BlobShapeNode>,
+    size: Size,
+    radius: Float,
+): CurveInsertTarget? {
+    val canvasNodes = nodes.toCanvasNodes(size)
+    if (canvasNodes.isEmpty()) return null
+    var nearest: CurveInsertTarget? = null
+    canvasNodes.forEachIndexed { index, node ->
+        val next = canvasNodes[(index + 1) % canvasNodes.size]
+        for (sample in 1 until CURVE_INSERT_SAMPLE_STEPS) {
+            val fraction = sample.toFloat() / CURVE_INSERT_SAMPLE_STEPS
+            val point = cubicPoint(
+                start = node.anchor,
+                controlOne = node.outHandle,
+                controlTwo = next.inHandle,
+                end = next.anchor,
+                fraction = fraction,
+            )
+            val distance = hypot(offset.x - point.x, offset.y - point.y)
+            val currentNearest = nearest
+            if (currentNearest == null || distance < currentNearest.distance) {
+                nearest = CurveInsertTarget(index, fraction, distance)
+            }
+        }
+    }
+    return nearest?.takeIf { it.distance <= radius }
+}
+
+private fun splitSegmentPreservingOutline(
+    nodes: List<BlobShapeNode>,
+    startIndex: Int,
+    fraction: Float,
+): Pair<List<BlobShapeNode>, Int> {
+    val endIndex = (startIndex + 1).floorMod(nodes.size)
+    val start = nodes[startIndex]
+    val end = nodes[endIndex]
+    val split = splitCubic(start, end, fraction)
+
+    val next = nodes.toMutableList()
+    next[startIndex] = start.copy(outHandle = split.startOutHandle)
     val insertIndex = if (endIndex == 0) next.size else endIndex
-    next.add(
-        insertIndex,
-        BlobShapeNode(
+    next.add(insertIndex, split.insertedNode)
+    val shiftedEndIndex = if (endIndex == 0) 0 else insertIndex + 1
+    next[shiftedEndIndex] = next[shiftedEndIndex].copy(inHandle = split.endInHandle)
+    return next to insertIndex
+}
+
+private fun splitCubic(
+    start: BlobShapeNode,
+    end: BlobShapeNode,
+    fraction: Float,
+): CurveSplit {
+    val safeFraction = fraction.coerceIn(0.001f, 0.999f)
+    val p01 = start.anchor.lerp(start.outHandle, safeFraction)
+    val p12 = start.outHandle.lerp(end.inHandle, safeFraction)
+    val p23 = end.inHandle.lerp(end.anchor, safeFraction)
+    val p012 = p01.lerp(p12, safeFraction)
+    val p123 = p12.lerp(p23, safeFraction)
+    val midpoint = p012.lerp(p123, safeFraction)
+
+    return CurveSplit(
+        startOutHandle = p01,
+        insertedNode = BlobShapeNode(
             anchor = midpoint,
             inHandle = p012,
             outHandle = p123,
         ),
+        endInHandle = p23,
     )
-    val shiftedEndIndex = if (endIndex == 0) 0 else insertIndex + 1
-    next[shiftedEndIndex] = next[shiftedEndIndex].copy(inHandle = p23)
-    return next to insertIndex
+}
+
+private fun cubicPoint(
+    start: Offset,
+    controlOne: Offset,
+    controlTwo: Offset,
+    end: Offset,
+    fraction: Float,
+): Offset {
+    val safeFraction = fraction.coerceIn(0f, 1f)
+    val p01 = start.lerp(controlOne, safeFraction)
+    val p12 = controlOne.lerp(controlTwo, safeFraction)
+    val p23 = controlTwo.lerp(end, safeFraction)
+    val p012 = p01.lerp(p12, safeFraction)
+    val p123 = p12.lerp(p23, safeFraction)
+    return p012.lerp(p123, safeFraction)
 }
 
 private fun removePointPreservingOutline(
@@ -1347,6 +1452,13 @@ private fun MapPoint.coerceShapePoint(): MapPoint {
 
 private fun MapPoint.lerp(end: MapPoint, fraction: Float): MapPoint {
     return MapPoint(
+        x = lerp(x, end.x, fraction),
+        y = lerp(y, end.y, fraction),
+    )
+}
+
+private fun Offset.lerp(end: Offset, fraction: Float): Offset {
+    return Offset(
         x = lerp(x, end.x, fraction),
         y = lerp(y, end.y, fraction),
     )
@@ -1652,6 +1764,8 @@ private const val MAX_CURVE_TENSION = 0.38f
 private const val MAX_SELECTED_HANDLE_DISTANCE = 0.80f
 private const val SELECT_HANDLE_RADIUS_PX = 86f
 private const val DRAG_HANDLE_RADIUS_PX = 104f
+private const val CURVE_INSERT_RADIUS_PX = 44f
+private const val CURVE_INSERT_SAMPLE_STEPS = 40
 
 private fun formatMs(ms: Int): String {
     val totalSeconds = (ms / 1_000f).coerceAtLeast(0f)

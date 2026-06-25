@@ -106,11 +106,13 @@ fun SoundEditorScreen(
     if (isEditingShape) {
         ShapeVectorEditorScreen(
             points = draft.shapePoints,
+            curveTension = draft.curveTension,
             color = draft.color,
             selectedPoint = selectedShapePoint,
             modifier = modifier.fillMaxSize(),
             onSelectedPointChange = { selectedShapePoint = it },
             onPointsChange = { draft = draft.copy(shapePoints = it) },
+            onCurveTensionChange = { draft = draft.copy(curveTension = it) },
             onDone = { isEditingShape = false },
         )
         return
@@ -181,6 +183,7 @@ fun SoundEditorScreen(
                     color = draft.color,
                     points = draft.shapePoints,
                     modifier = Modifier.size(136.dp),
+                    curveTension = draft.curveTension,
                 )
                 Text(
                     text = draft.name,
@@ -237,6 +240,7 @@ fun SoundEditorScreen(
             CustomColorMixer(
                 colorArgb = draft.colorArgb,
                 shapePoints = draft.shapePoints,
+                curveTension = draft.curveTension,
                 onColorChange = { draft = draft.copy(colorArgb = it) },
             )
         }
@@ -244,9 +248,14 @@ fun SoundEditorScreen(
         EditorSection(title = "Shape") {
             ShapePresetGrid(
                 selectedPoints = draft.shapePoints,
+                selectedCurveTension = draft.curveTension,
                 color = draft.color,
-                onPresetSelected = { preset, points ->
-                    draft = draft.copy(shapePreset = preset, shapePoints = points)
+                onPresetSelected = { preset, points, curveTension ->
+                    draft = draft.copy(
+                        shapePreset = preset,
+                        shapePoints = points,
+                        curveTension = curveTension,
+                    )
                     selectedShapePoint = -1
                 },
             )
@@ -264,6 +273,7 @@ fun SoundEditorScreen(
                         color = draft.color,
                         points = draft.shapePoints,
                         modifier = Modifier.size(86.dp),
+                        curveTension = draft.curveTension,
                     )
                     Text(
                         text = "${draft.shapePoints.size} points",
@@ -347,8 +357,9 @@ private fun EditorSection(
 @Composable
 private fun ShapePresetGrid(
     selectedPoints: List<Float>,
+    selectedCurveTension: Float,
     color: Color,
-    onPresetSelected: (BlobShapePreset, List<Float>) -> Unit,
+    onPresetSelected: (BlobShapePreset, List<Float>, Float) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -359,9 +370,10 @@ private fun ShapePresetGrid(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                row.forEach { (preset, points) ->
+                row.forEach { shape ->
                     val press = rememberPressFeedback(pressedScale = 0.92f)
-                    val isSelected = shapePointsMatch(selectedPoints, points)
+                    val isSelected = shapePointsMatch(selectedPoints, shape.points) &&
+                        abs(selectedCurveTension - shape.curveTension) < 0.001f
                     Surface(
                         modifier = Modifier
                             .weight(1f)
@@ -370,7 +382,7 @@ private fun ShapePresetGrid(
                             .clickable(
                                 interactionSource = press.interactionSource,
                                 indication = LocalIndication.current,
-                            ) { onPresetSelected(preset, points) },
+                            ) { onPresetSelected(shape.preset, shape.points, shape.curveTension) },
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         tonalElevation = if (press.isPressed) 5.dp else 0.dp,
@@ -385,8 +397,9 @@ private fun ShapePresetGrid(
                     ) {
                         BlobPreview(
                             color = color,
-                            points = points,
+                            points = shape.points,
                             modifier = Modifier.padding(7.dp),
+                            curveTension = shape.curveTension,
                         )
                     }
                 }
@@ -462,6 +475,7 @@ private fun ColorSwatch(
 private fun CustomColorMixer(
     colorArgb: Long,
     shapePoints: List<Float>,
+    curveTension: Float,
     onColorChange: (Long) -> Unit,
 ) {
     val red = colorComponent(colorArgb, 16)
@@ -486,6 +500,7 @@ private fun CustomColorMixer(
                     color = Color(colorArgb),
                     points = shapePoints,
                     modifier = Modifier.size(74.dp),
+                    curveTension = curveTension,
                 )
                 Column(
                     modifier = Modifier.weight(1f),
@@ -604,11 +619,13 @@ private fun EditorNameField(
 @Composable
 private fun ShapeVectorEditorScreen(
     points: List<Float>,
+    curveTension: Float,
     color: Color,
     selectedPoint: Int,
     modifier: Modifier = Modifier,
     onSelectedPointChange: (Int) -> Unit,
     onPointsChange: (List<Float>) -> Unit,
+    onCurveTensionChange: (Float) -> Unit,
     onDone: () -> Unit,
 ) {
     val backPress = rememberPressFeedback(pressedScale = 0.90f)
@@ -667,6 +684,7 @@ private fun ShapeVectorEditorScreen(
         ) {
             ShapeVectorCanvas(
                 points = points,
+                curveTension = curveTension,
                 color = color,
                 selectedPoint = selectedPoint,
                 modifier = Modifier.fillMaxSize(),
@@ -674,6 +692,11 @@ private fun ShapeVectorEditorScreen(
                 onPointsChange = onPointsChange,
             )
         }
+
+        CurveSoftnessControl(
+            curveTension = curveTension,
+            onCurveTensionChange = onCurveTensionChange,
+        )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -718,6 +741,7 @@ private fun ShapeVectorEditorScreen(
 @Composable
 private fun ShapeVectorCanvas(
     points: List<Float>,
+    curveTension: Float,
     color: Color,
     selectedPoint: Int,
     modifier: Modifier = Modifier,
@@ -737,7 +761,7 @@ private fun ShapeVectorCanvas(
             .pointerInput(points, canvasSize) {
                 detectTapGestures { offset ->
                     val anchors = handleOffsets(Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()), points)
-                    val handle = nearestHandle(offset, anchors)
+                    val handle = nearestHandle(offset, anchors, SELECT_HANDLE_RADIUS_PX)
                     if (handle != null) {
                         onSelectedPointChange(handle)
                     } else {
@@ -749,7 +773,7 @@ private fun ShapeVectorCanvas(
                 detectDragGestures(
                     onDragStart = { offset ->
                         val anchors = handleOffsets(Size(canvasSize.width.toFloat(), canvasSize.height.toFloat()), points)
-                        activePoint = nearestHandle(offset, anchors) ?: -1
+                        activePoint = targetDragHandle(offset, anchors, selectedPoint)
                         if (activePoint >= 0) {
                             onSelectedPointChange(activePoint)
                         }
@@ -759,6 +783,7 @@ private fun ShapeVectorCanvas(
                 ) { change, _ ->
                     val index = activePoint
                     if (index >= 0) {
+                        change.consume()
                         val next = points.toMutableList()
                         next[index] = multiplierFor(change.position, canvasSize)
                         onPointsChange(next)
@@ -768,8 +793,8 @@ private fun ShapeVectorCanvas(
     ) {
         val safePoints = points.ifEmpty { List(8) { 1f } }
         val handles = handleOffsets(size, safePoints)
-        val path = smoothPathFromAnchors(handles)
-        val segments = curveSegments(handles)
+        val path = smoothPathFromAnchors(handles, curveTension)
+        val segments = curveSegments(handles, curveTension)
 
         drawVectorGrid(color = guideColor)
 
@@ -829,14 +854,54 @@ private fun ShapeVectorCanvas(
         handles.forEachIndexed { index, offset ->
             drawCircle(
                 color = if (index == activePoint || index == selectedPoint) activeHandleColor else Color.White,
-                radius = if (index == selectedPoint) 15.dp.toPx() else 11.dp.toPx(),
+                radius = if (index == selectedPoint) 18.dp.toPx() else 13.dp.toPx(),
                 center = offset,
             )
             drawCircle(
                 color = handleBorderColor,
-                radius = if (index == selectedPoint) 15.dp.toPx() else 11.dp.toPx(),
+                radius = if (index == selectedPoint) 18.dp.toPx() else 13.dp.toPx(),
                 center = offset,
                 style = Stroke(width = 2.dp.toPx()),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CurveSoftnessControl(
+    curveTension: Float,
+    onCurveTensionChange: (Float) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Curve",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = if (curveTension < 0.12f) "Sharp" else if (curveTension > 0.28f) "Soft" else "Balanced",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                )
+            }
+            Slider(
+                value = curveTension,
+                onValueChange = onCurveTensionChange,
+                valueRange = MIN_CURVE_TENSION..MAX_CURVE_TENSION,
             )
         }
     }
@@ -855,18 +920,32 @@ private fun handleOffsets(size: Size, points: List<Float>): List<Offset> {
     }
 }
 
-private fun nearestHandle(offset: Offset, anchors: List<Offset>): Int? {
+private fun nearestHandle(offset: Offset, anchors: List<Offset>, radius: Float): Int? {
     return anchors
         .mapIndexed { index, anchor -> index to hypot(offset.x - anchor.x, offset.y - anchor.y) }
         .minByOrNull { it.second }
-        ?.takeIf { it.second < 64f }
+        ?.takeIf { it.second < radius }
         ?.first
+}
+
+private fun targetDragHandle(offset: Offset, anchors: List<Offset>, selectedPoint: Int): Int {
+    val directHandle = nearestHandle(offset, anchors, DRAG_HANDLE_RADIUS_PX)
+    if (directHandle != null) return directHandle
+    if (selectedPoint in anchors.indices) {
+        val selected = anchors[selectedPoint]
+        val selectedDistance = hypot(offset.x - selected.x, offset.y - selected.y)
+        if (selectedDistance < SELECTED_HANDLE_DRAG_RADIUS_PX) {
+            return selectedPoint
+        }
+    }
+    return -1
 }
 
 private fun multiplierFor(offset: Offset, size: IntSize): Float {
     val center = Offset(size.width / 2f, size.height / 2f)
     val radius = shapeEditRadius(Size(size.width.toFloat(), size.height.toFloat()))
-    return (hypot(offset.x - center.x, offset.y - center.y) / radius).coerceIn(0.58f, 1.36f)
+    return (hypot(offset.x - center.x, offset.y - center.y) / radius)
+        .coerceIn(MIN_SHAPE_MULTIPLIER, MAX_SHAPE_MULTIPLIER)
 }
 
 private fun shapeEditRadius(size: Size): Float {
@@ -897,11 +976,11 @@ private data class CurveSegment(
     val end: Offset,
 )
 
-private fun smoothPathFromAnchors(anchors: List<Offset>): Path {
+private fun smoothPathFromAnchors(anchors: List<Offset>, curveTension: Float): Path {
     val path = Path()
     if (anchors.isEmpty()) return path
     path.moveTo(anchors.first().x, anchors.first().y)
-    curveSegments(anchors).forEach { segment ->
+    curveSegments(anchors, curveTension).forEach { segment ->
         path.cubicTo(
             segment.controlOne.x,
             segment.controlOne.y,
@@ -915,8 +994,9 @@ private fun smoothPathFromAnchors(anchors: List<Offset>): Path {
     return path
 }
 
-private fun curveSegments(anchors: List<Offset>): List<CurveSegment> {
+private fun curveSegments(anchors: List<Offset>, curveTension: Float): List<CurveSegment> {
     if (anchors.isEmpty()) return emptyList()
+    val tension = curveTension.coerceIn(MIN_CURVE_TENSION, MAX_CURVE_TENSION)
     return anchors.mapIndexed { index, anchor ->
         val previous = anchors[(index - 1 + anchors.size) % anchors.size]
         val next = anchors[(index + 1) % anchors.size]
@@ -924,12 +1004,12 @@ private fun curveSegments(anchors: List<Offset>): List<CurveSegment> {
         CurveSegment(
             start = anchor,
             controlOne = Offset(
-                x = anchor.x + (next.x - previous.x) * CURVE_TENSION,
-                y = anchor.y + (next.y - previous.y) * CURVE_TENSION,
+                x = anchor.x + (next.x - previous.x) * tension,
+                y = anchor.y + (next.y - previous.y) * tension,
             ),
             controlTwo = Offset(
-                x = next.x - (afterNext.x - anchor.x) * CURVE_TENSION,
-                y = next.y - (afterNext.y - anchor.y) * CURVE_TENSION,
+                x = next.x - (afterNext.x - anchor.x) * tension,
+                y = next.y - (afterNext.y - anchor.y) * tension,
             ),
             end = next,
         )
@@ -1014,9 +1094,13 @@ private fun shapePointsMatch(left: List<Float>, right: List<Float>): Boolean {
 
 private const val MIN_SHAPE_POINTS = 5
 private const val MAX_SHAPE_POINTS = 24
-private const val MIN_SHAPE_MULTIPLIER = 0.58f
-private const val MAX_SHAPE_MULTIPLIER = 1.36f
-private const val CURVE_TENSION = 0.24f
+private const val MIN_SHAPE_MULTIPLIER = 0.48f
+private const val MAX_SHAPE_MULTIPLIER = 1.52f
+private const val MIN_CURVE_TENSION = 0.04f
+private const val MAX_CURVE_TENSION = 0.38f
+private const val SELECT_HANDLE_RADIUS_PX = 86f
+private const val DRAG_HANDLE_RADIUS_PX = 104f
+private const val SELECTED_HANDLE_DRAG_RADIUS_PX = 142f
 
 private fun formatMs(ms: Int): String {
     val totalSeconds = (ms / 1_000f).coerceAtLeast(0f)

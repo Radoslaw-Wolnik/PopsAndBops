@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -229,31 +229,15 @@ fun SoundEditorScreen(
         }
 
         EditorSection(title = "Colour") {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                BlobDefaults.palette.forEach { colorArgb ->
-                    val press = rememberPressFeedback(pressedScale = 0.88f)
-                    Surface(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .scale(press.scale)
-                            .clickable(
-                                interactionSource = press.interactionSource,
-                                indication = LocalIndication.current,
-                            ) { draft = draft.copy(colorArgb = colorArgb) },
-                        shape = CircleShape,
-                        color = Color(colorArgb),
-                        border = BorderStroke(
-                            width = if (draft.colorArgb == colorArgb) 4.dp else 1.dp,
-                            color = if (draft.colorArgb == colorArgb) MaterialTheme.colorScheme.onSurface else Color.White,
-                        ),
-                    ) {}
-                }
-            }
+            ColorPaletteGrid(
+                selectedColorArgb = draft.colorArgb,
+                onColorChange = { draft = draft.copy(colorArgb = it) },
+            )
+            CustomColorMixer(
+                colorArgb = draft.colorArgb,
+                shapePoints = draft.shapePoints,
+                onColorChange = { draft = draft.copy(colorArgb = it) },
+            )
         }
 
         EditorSection(title = "Shape") {
@@ -383,6 +367,168 @@ private fun EditorSection(
             )
             content()
         }
+    }
+}
+
+@Composable
+private fun ColorPaletteGrid(
+    selectedColorArgb: Long,
+    onColorChange: (Long) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        BlobDefaults.palette.chunked(7).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                row.forEach { colorArgb ->
+                    ColorSwatch(
+                        colorArgb = colorArgb,
+                        isSelected = selectedColorArgb == colorArgb,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onColorChange(colorArgb) },
+                    )
+                }
+                repeat(7 - row.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorSwatch(
+    colorArgb: Long,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val press = rememberPressFeedback(pressedScale = 0.88f)
+    Surface(
+        modifier = modifier
+            .height(42.dp)
+            .scale(press.scale)
+            .clickable(
+                interactionSource = press.interactionSource,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
+        shape = RoundedCornerShape(8.dp),
+        color = Color(colorArgb),
+        border = BorderStroke(
+            width = if (isSelected) 4.dp else 1.dp,
+            color = if (isSelected) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+            },
+        ),
+    ) {}
+}
+
+@Composable
+private fun CustomColorMixer(
+    colorArgb: Long,
+    shapePoints: List<Float>,
+    onColorChange: (Long) -> Unit,
+) {
+    val red = colorComponent(colorArgb, 16)
+    val green = colorComponent(colorArgb, 8)
+    val blue = colorComponent(colorArgb, 0)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BlobPreview(
+                    color = Color(colorArgb),
+                    points = shapePoints,
+                    modifier = Modifier.size(74.dp),
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = "Custom",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                    )
+                    Text(
+                        text = colorHex(colorArgb),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+                    )
+                }
+            }
+            ColorSlider(
+                label = "Red",
+                value = red,
+                color = Color(0xFFFF5A7A),
+                onValueChange = { onColorChange(argbFromComponents(it, green, blue)) },
+            )
+            ColorSlider(
+                label = "Green",
+                value = green,
+                color = Color(0xFF28C7B7),
+                onValueChange = { onColorChange(argbFromComponents(red, it, blue)) },
+            )
+            ColorSlider(
+                label = "Blue",
+                value = blue,
+                color = Color(0xFF4D96FF),
+                onValueChange = { onColorChange(argbFromComponents(red, green, it)) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColorSlider(
+    label: String,
+    value: Float,
+    color: Color,
+    onValueChange: (Float) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.size(width = 48.dp, height = 22.dp),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = color,
+        )
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = 0f..255f,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value.roundToInt().toString(),
+            modifier = Modifier.size(width = 34.dp, height = 22.dp),
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.End,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.62f),
+        )
     }
 }
 
@@ -814,6 +960,24 @@ private fun darker(color: Color): Color {
         blue = color.blue * 0.68f,
         alpha = color.alpha,
     )
+}
+
+private fun colorComponent(colorArgb: Long, shift: Int): Float {
+    return ((colorArgb shr shift) and 0xFFL).toFloat()
+}
+
+private fun argbFromComponents(red: Float, green: Float, blue: Float): Long {
+    val r = red.roundToInt().coerceIn(0, 255).toLong()
+    val g = green.roundToInt().coerceIn(0, 255).toLong()
+    val b = blue.roundToInt().coerceIn(0, 255).toLong()
+    return 0xFF000000L or (r shl 16) or (g shl 8) or b
+}
+
+private fun colorHex(colorArgb: Long): String {
+    val red = colorComponent(colorArgb, 16).roundToInt()
+    val green = colorComponent(colorArgb, 8).roundToInt()
+    val blue = colorComponent(colorArgb, 0).roundToInt()
+    return "#%02X%02X%02X".format(red, green, blue)
 }
 
 private const val MIN_SHAPE_POINTS = 5

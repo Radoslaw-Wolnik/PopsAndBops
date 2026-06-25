@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 class BlobMapLayoutTest {
@@ -18,7 +19,7 @@ class BlobMapLayoutTest {
     }
 
     @Test
-    fun arrangedPositionsUseScatteredCellsInsteadOfOneRing() {
+    fun arrangedPositionsUseOrganicScatterInsteadOfOneRing() {
         val positions = BlobMapLayout.arrangedPositions(12)
         val roundedDistances = positions
             .map { hypot(it.x, it.y).roundToGrid() }
@@ -30,11 +31,29 @@ class BlobMapLayoutTest {
     }
 
     @Test
+    fun arrangedPositionsAvoidObviousRowsAndColumns() {
+        val positions = BlobMapLayout.arrangedPositions(18)
+        val biggestXBucket = positions
+            .groupingBy { (it.x / 28f).roundToInt() }
+            .eachCount()
+            .values
+            .maxOrNull() ?: 0
+        val biggestYBucket = positions
+            .groupingBy { (it.y / 28f).roundToInt() }
+            .eachCount()
+            .values
+            .maxOrNull() ?: 0
+
+        assertTrue(biggestXBucket <= 3)
+        assertTrue(biggestYBucket <= 3)
+    }
+
+    @Test
     fun firstEightArrangedPositionsStayCompactWithoutOverlapping() {
         val positions = BlobMapLayout.arrangedPositions(8)
         val distancesFromCenter = positions.map { hypot(it.x, it.y) }
 
-        assertTrue(distancesFromCenter.all { it < BlobMapLayout.MinimumBlobSpacing * 1.6f })
+        assertTrue(distancesFromCenter.all { it < BlobMapLayout.MinimumBlobSpacing * 2.1f })
         assertEdgeMargins(positions)
     }
 

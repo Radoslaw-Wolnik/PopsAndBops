@@ -272,14 +272,9 @@ object BlobMapLayout {
     const val BlobCollisionMargin = 8f
     const val MinimumBlobSpacing = BlobButtonDiameter + BlobCollisionMargin
     const val CenterClearRadius = MinimumBlobSpacing
-    const val ScatterCellSpacing = MinimumBlobSpacing + 10f
 
     fun suggestedPosition(index: Int): MapPoint {
-        val cell = scatterCell(index)
-        return MapPoint(
-            x = cell.x * ScatterCellSpacing + scatterJitter(index, salt = 11),
-            y = cell.y * ScatterCellSpacing + scatterJitter(index, salt = 17),
-        )
+        return arrangedPositions(index + 1).last()
     }
 
     fun arrangedPosition(index: Int): MapPoint {
@@ -289,17 +284,13 @@ object BlobMapLayout {
     fun arrangedPositions(count: Int): List<MapPoint> {
         val placed = mutableListOf<MapPoint>()
         repeat(count) { index ->
-            placed += resolveOverlaps(
-                position = arrangedPosition(index),
-                occupiedPositions = placed,
-                minimumSpacing = MinimumBlobSpacing,
-            )
+            placed += bestOrganicCandidate(index, placed)
         }
         return placed
     }
 
     fun snapToArrangeSlot(position: MapPoint): MapPoint {
-        return scatterCandidates(maxCount = 160)
+        return arrangedPositions(160)
             .minByOrNull { it.distanceSquaredTo(position) }
             ?: suggestedPosition(0)
     }
@@ -336,61 +327,84 @@ object BlobMapLayout {
     }
 
     fun guideRadii(maxDistance: Float): List<Float> {
-        val guideCount = ((maxDistance / ScatterCellSpacing).roundToInt() + 3).coerceAtLeast(3)
-        return List(guideCount) { guide -> CenterClearRadius + guide * ScatterCellSpacing }
+        val guideCount = ((maxDistance / MinimumBlobSpacing).roundToInt() + 3).coerceAtLeast(3)
+        return List(guideCount) { guide -> CenterClearRadius + guide * MinimumBlobSpacing }
     }
 
-    private data class ScatterCell(
-        val x: Int,
-        val y: Int,
-    )
+    private fun bestOrganicCandidate(index: Int, placed: List<MapPoint>): MapPoint {
+        val candidate = (0 until ORGANIC_CANDIDATE_COUNT)
+            .map { attempt -> organicCandidate(index, attempt) }
+            .filter { it.isClearOrganicPosition(placed) }
+            .minByOrNull { organicCandidateScore(it, placed) }
+        if (candidate != null) return candidate
 
-    private fun scatterCell(index: Int): ScatterCell {
-        var remaining = index
-        var shell = 1
-        while (true) {
-            val shellCells = scatterShell(shell)
-            if (remaining < shellCells.size) return shellCells[remaining]
-            remaining -= shellCells.size
-            shell += 1
-        }
+        return searchNearestClearPosition(
+            position = organicFallbackPosition(index),
+            occupiedPositions = placed + MapPoint(0f, 0f),
+            minimumSpacing = MinimumBlobSpacing,
+        ).outsideCenterClearRadius()
     }
 
-    private fun scatterCandidates(maxCount: Int): List<MapPoint> {
-        return List(maxCount.coerceAtLeast(0)) { index -> suggestedPosition(index) }
+    private fun organicCandidate(index: Int, attempt: Int): MapPoint {
+        val sequence = index * ORGANIC_CANDIDATE_COUNT + attempt
+        val growth = sqrt((index + 1).toFloat())
+        val halfWidth = CenterClearRadius + MinimumBlobSpacing * (1.15f + growth * 0.82f)
+        val halfHeight = CenterClearRadius + MinimumBlobSpacing * (0.92f + growth * 0.68f)
+        return MapPoint(
+            x = organicSignedUnit(sequence, salt = 19) * halfWidth,
+            y = organicSignedUnit(sequence, salt = 43) * halfHeight,
+        ).outsideCenterClearRadius()
     }
 
-    private fun scatterShell(shell: Int): List<ScatterCell> {
-        val cells = mutableListOf<ScatterCell>()
-        for (y in -shell..shell) {
-            for (x in -shell..shell) {
-                if (max(abs(x), abs(y)) == shell) {
-                    cells += ScatterCell(x, y)
-                }
-            }
-        }
-        return cells.sortedWith(
-            compareBy<ScatterCell> { scatterBandScore(it) }
-                .thenBy { scatterOrder(it) },
+    private fun organicFallbackPosition(index: Int): MapPoint {
+        val angle = index * GOLDEN_ANGLE
+        val radius = CenterClearRadius + MinimumBlobSpacing * sqrt(index + 1f) * 0.72f
+        return MapPoint(
+            x = cos(angle) * radius * 1.16f,
+            y = sin(angle) * radius * 0.92f,
         )
     }
 
-    private fun scatterBandScore(cell: ScatterCell): Float {
-        val wideScreenBias = max(abs(cell.x) / 3f, abs(cell.y) / 2f)
-        val distanceBias = (abs(cell.x) + abs(cell.y)) * 0.04f
-        return wideScreenBias + distanceBias
+    private fun organicCandidateScore(position: MapPoint, placed: List<MapPoint>): Float {
+        val centerScore = hypot(position.x * 0.82f, position.y * 1.06f)
+        val alignmentPenalty = placed.minOfOrNull { placedPosition ->
+            val closestAxis = minOf(abs(position.x - placedPosition.x), abs(position.y - placedPosition.y))
+            (24f - closestAxis).coerceAtLeast(0f) * 2.4f
+        } ?: 0f
+        val spacingPreference = placed.minOfOrNull { placedPosition ->
+            abs(distanceBetween(position, placedPosition) - MinimumBlobSpacing * 1.14f)
+        } ?: 0f
+        return centerScore + alignmentPenalty + spacingPreference * 0.12f
     }
 
-    private fun scatterOrder(cell: ScatterCell): Int {
-        return (cell.x * 73 + cell.y * 37 + 10_000).floorMod(997)
+    private fun MapPoint.isClearOrganicPosition(placed: List<MapPoint>): Boolean {
+        return isOutsideCenterClearRadius() && hasMinimumSpacingFrom(placed, MinimumBlobSpacing)
     }
 
-    private fun scatterJitter(index: Int, salt: Int): Float {
-        val bucket = ((index + 1) * salt + index * index * 3).floorMod(17) - 8
-        return bucket * 0.5f
+    private fun MapPoint.isOutsideCenterClearRadius(): Boolean {
+        return hypot(x, y) >= CenterClearRadius - FLOAT_TOLERANCE
     }
 
-    private fun Int.floorMod(modulus: Int): Int = ((this % modulus) + modulus) % modulus
+    private fun organicSignedUnit(sequence: Int, salt: Int): Float {
+        return organicUnit(sequence, salt) * 2f - 1f
+    }
+
+    private fun organicUnit(sequence: Int, salt: Int): Float {
+        var mixed = (sequence.toLong() + 1L) * 1_103_515_245L +
+            salt.toLong() * 12_345L +
+            sequence.toLong() * sequence.toLong() * 2_654_435_761L
+        mixed = mixed xor (mixed shr 16)
+        val bucket = ((mixed % 10_000L) + 10_000L) % 10_000L
+        return bucket / 9_999f
+    }
+
+    private fun MapPoint.outsideCenterClearRadius(): MapPoint {
+        val distance = hypot(x, y)
+        if (distance >= CenterClearRadius) return this
+        if (distance <= FLOAT_TOLERANCE) return MapPoint(CenterClearRadius, 0f)
+        val scale = CenterClearRadius / distance
+        return MapPoint(x * scale, y * scale)
+    }
 
     private fun overlapResolutionCandidates(
         position: MapPoint,
@@ -504,5 +518,7 @@ object BlobMapLayout {
     }
 
     private val ANGLE_NUDGE = 12f * (PI.toFloat() / 180f)
+    private val GOLDEN_ANGLE = PI.toFloat() * (3f - sqrt(5f))
+    private const val ORGANIC_CANDIDATE_COUNT = 96
     private const val FLOAT_TOLERANCE = 0.001f
 }

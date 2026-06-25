@@ -26,6 +26,9 @@ enum class BuiltInTone {
     Bounce,
     Pulse,
     Spark,
+    Chime,
+    Pluck,
+    Flutter,
 }
 
 data class MapPoint(
@@ -87,26 +90,13 @@ fun sanitizeTrimRange(
 
 object BlobDefaults {
     val palette = listOf(
-        0xFFFF5A7A,
-        0xFF28C7B7,
-        0xFFFFC857,
-        0xFF7C5CFF,
-        0xFF4ECDC4,
-        0xFFFF8A3D,
-        0xFF5BC0EB,
-        0xFFB8F35F,
-        0xFFE84855,
-        0xFF2B59C3,
-        0xFF00A6A6,
-        0xFFFF9F1C,
-        0xFFB565A7,
-        0xFF6A994E,
-        0xFFFF6B6B,
-        0xFF4D96FF,
-        0xFF9B5DE5,
-        0xFF00BBF9,
-        0xFFF15BB5,
-        0xFF90BE6D,
+        0xFFFF5A7A, 0xFFFF3366, 0xFFE84855, 0xFFFF6B6B,
+        0xFFFF8A3D, 0xFFFF9F1C, 0xFFFFC857, 0xFFFFE066,
+        0xFFB8F35F, 0xFF90BE6D, 0xFF6A994E, 0xFF2DD36F,
+        0xFF28C7B7, 0xFF00A6A6, 0xFF4ECDC4, 0xFF00BBF9,
+        0xFF5BC0EB, 0xFF4D96FF, 0xFF2B59C3, 0xFF7C5CFF,
+        0xFF9B5DE5, 0xFFF15BB5, 0xFFB565A7, 0xFFFF77B7,
+        0xFF8AC926, 0xFF1982C4, 0xFF6A4C93, 0xFFFFCA3A,
     )
 
     val shapeLibrary = listOf(
@@ -118,7 +108,16 @@ object BlobDefaults {
     )
 
     fun defaultSoundBlobs(now: Long = System.currentTimeMillis()): List<SoundBlob> {
-        val names = listOf("Pop prism", "Bubble zap", "Velvet boing", "Tiny orbit", "Lemon pulse")
+        val names = listOf(
+            "Pop prism",
+            "Bubble zap",
+            "Velvet boing",
+            "Tiny orbit",
+            "Lemon pulse",
+            "Glass chime",
+            "Soft pluck",
+            "Firefly flutter",
+        )
         return names.mapIndexed { index, name ->
             val shape = shapeLibrary[index % shapeLibrary.size]
             SoundBlob(
@@ -131,10 +130,15 @@ object BlobDefaults {
                 shapePoints = shape.second,
                 waveform = generatedWaveform(index + 7, 52),
                 trimStartMs = 0,
-                trimEndMs = 900 + (index * 140),
+                trimEndMs = presetDurationMs(index),
+                sourceDurationMs = presetDurationMs(index),
                 builtInTone = BuiltInTone.entries[index % BuiltInTone.entries.size],
             )
         }
+    }
+
+    private fun presetDurationMs(index: Int): Int {
+        return listOf(520, 680, 780, 960, 720, 1_120, 640, 1_180)[index % 8]
     }
 
     fun edgePosition(index: Int): MapPoint {

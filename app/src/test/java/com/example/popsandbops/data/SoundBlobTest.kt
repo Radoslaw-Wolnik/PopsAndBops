@@ -55,8 +55,9 @@ class SoundBlobTest {
     fun defaultSoundBlobsArePlayableAndUnique() {
         val blobs = BlobDefaults.defaultSoundBlobs(now = 1_000_000L)
 
-        assertEquals(5, blobs.size)
+        assertEquals(BuiltInTone.entries.size, blobs.size)
         assertEquals(blobs.size, blobs.map { it.id }.toSet().size)
+        assertEquals(BuiltInTone.entries.toSet(), blobs.mapNotNull { it.builtInTone }.toSet())
         assertTrue(blobs.all { it.isPinned })
         assertTrue(blobs.all { it.builtInTone != null })
         assertTrue(blobs.all { it.waveform.isNotEmpty() })

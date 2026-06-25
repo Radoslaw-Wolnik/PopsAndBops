@@ -6,6 +6,7 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -49,6 +50,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -127,81 +129,91 @@ fun SoundMapScreen(
         }
 
         blobs.forEach { blob ->
-            val scaledSize = with(density) { (BlobMapLayout.BlobButtonDiameter.dp.toPx() * zoom).toDp() }
-            val dragOffset = dragOffsets[blob.id] ?: Offset.Zero
-            val candidatePosition = MapPoint(
-                x = blob.position.x + dragOffset.x,
-                y = blob.position.y + dragOffset.y,
-            )
-            val occupiedPositions = blobs
-                .filter { it.id != blob.id }
-                .map { it.position }
-            val isDragging = draggingBlobId == blob.id
-            val resolvedPosition = if (isDragging) {
-                BlobMapLayout.resolveOverlaps(candidatePosition, occupiedPositions)
-            } else {
-                candidatePosition
-            }
-            val worldPosition = Offset(resolvedPosition.x, resolvedPosition.y)
-            val screen = center + pan + Offset(worldPosition.x * worldToPx, worldPosition.y * worldToPx)
-            BlobButton(
-                name = blob.name,
-                color = blob.color,
-                points = blob.shapePoints,
-                isPlaying = playingBlobId == blob.id || isDragging,
-                size = scaledSize,
-                showName = showBlobNames,
-                curveTension = blob.curveTension,
-                nodes = blob.effectiveShapeNodes(),
-                modifier = Modifier
-                    .offset {
-                        val sizePx = with(density) { scaledSize.toPx() }
-                        IntOffset(
-                            x = (screen.x - sizePx / 2f).roundToInt(),
-                            y = (screen.y - sizePx / 2f).roundToInt(),
-                        )
-                    }
-                    .then(
-                        if (isArranging) {
-                            Modifier.pointerInput(blob.id, zoom) {
-                                detectDragGestures(
-                                    onDragStart = { draggingBlobId = blob.id },
-                                    onDragEnd = {
-                                        val finalOffset = dragOffsets[blob.id] ?: Offset.Zero
-                                        val finalPosition = BlobMapLayout.resolveOverlaps(
-                                            position = MapPoint(
-                                                x = blob.position.x + finalOffset.x,
-                                                y = blob.position.y + finalOffset.y,
-                                            ),
-                                            occupiedPositions = occupiedPositions,
-                                        )
-                                        onBlobMoved(
-                                            blob,
-                                            finalPosition,
-                                        )
-                                        dragOffsets.remove(blob.id)
-                                        draggingBlobId = null
-                                    },
-                                    onDragCancel = {
-                                        dragOffsets.remove(blob.id)
-                                        draggingBlobId = null
-                                    },
-                                ) { change, dragAmount ->
-                                    change.consume()
-                                    dragOffsets[blob.id] = (dragOffsets[blob.id] ?: Offset.Zero) +
-                                        (dragAmount / worldToPx)
-                                }
-                            }
-                        } else {
-                            Modifier
-                        },
+            key(blob.id) {
+                val scaledSize = with(density) { (BlobMapLayout.BlobButtonDiameter.dp.toPx() * zoom).toDp() }
+                val dragOffset = dragOffsets[blob.id] ?: Offset.Zero
+                val candidatePosition = MapPoint(
+                    x = blob.position.x + dragOffset.x,
+                    y = blob.position.y + dragOffset.y,
+                )
+                val occupiedPositions = blobs
+                    .filter { it.id != blob.id }
+                    .map { it.position }
+                val isDragging = draggingBlobId == blob.id
+                val resolvedPosition = if (isDragging) {
+                    BlobMapLayout.resolveOverlaps(candidatePosition, occupiedPositions)
+                } else {
+                    candidatePosition
+                }
+                val worldPosition = Offset(resolvedPosition.x, resolvedPosition.y)
+                val targetScreen = center + pan + Offset(worldPosition.x * worldToPx, worldPosition.y * worldToPx)
+                val animatedScreen by animateOffsetAsState(
+                    targetValue = targetScreen,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
                     ),
-                onClick = {
-                    if (!isArranging) {
-                        onBlobClick(blob)
-                    }
-                },
-            )
+                    label = "blob map position",
+                )
+                BlobButton(
+                    name = blob.name,
+                    color = blob.color,
+                    points = blob.shapePoints,
+                    isPlaying = playingBlobId == blob.id || isDragging,
+                    size = scaledSize,
+                    showName = showBlobNames,
+                    curveTension = blob.curveTension,
+                    nodes = blob.effectiveShapeNodes(),
+                    modifier = Modifier
+                        .offset {
+                            val sizePx = with(density) { scaledSize.toPx() }
+                            IntOffset(
+                                x = (animatedScreen.x - sizePx / 2f).roundToInt(),
+                                y = (animatedScreen.y - sizePx / 2f).roundToInt(),
+                            )
+                        }
+                        .then(
+                            if (isArranging) {
+                                Modifier.pointerInput(blob.id, zoom) {
+                                    detectDragGestures(
+                                        onDragStart = { draggingBlobId = blob.id },
+                                        onDragEnd = {
+                                            val finalOffset = dragOffsets[blob.id] ?: Offset.Zero
+                                            val finalPosition = BlobMapLayout.resolveOverlaps(
+                                                position = MapPoint(
+                                                    x = blob.position.x + finalOffset.x,
+                                                    y = blob.position.y + finalOffset.y,
+                                                ),
+                                                occupiedPositions = occupiedPositions,
+                                            )
+                                            onBlobMoved(
+                                                blob,
+                                                finalPosition,
+                                            )
+                                            dragOffsets.remove(blob.id)
+                                            draggingBlobId = null
+                                        },
+                                        onDragCancel = {
+                                            dragOffsets.remove(blob.id)
+                                            draggingBlobId = null
+                                        },
+                                    ) { change, dragAmount ->
+                                        change.consume()
+                                        dragOffsets[blob.id] = (dragOffsets[blob.id] ?: Offset.Zero) +
+                                            (dragAmount / worldToPx)
+                                    }
+                                }
+                            } else {
+                                Modifier
+                            },
+                        ),
+                    onClick = {
+                        if (!isArranging) {
+                            onBlobClick(blob)
+                        }
+                    },
+                )
+            }
         }
 
         if (!isArranging) {

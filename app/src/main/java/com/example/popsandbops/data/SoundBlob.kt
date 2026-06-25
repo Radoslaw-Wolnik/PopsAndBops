@@ -8,6 +8,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 const val MIN_SOUND_DURATION_MS = 250
 
@@ -109,11 +110,11 @@ object BlobDefaults {
     )
 
     val shapeLibrary = listOf(
-        BlobShapePreset.Splash to listOf(1.00f, 0.78f, 1.18f, 0.86f, 1.08f, 0.74f, 1.14f, 0.92f),
-        BlobShapePreset.Pebble to listOf(1.00f, 0.96f, 1.04f, 1.08f, 0.98f, 0.90f, 0.94f, 1.02f),
-        BlobShapePreset.Starburst to listOf(1.20f, 0.70f, 1.16f, 0.76f, 1.26f, 0.68f, 1.12f, 0.80f),
-        BlobShapePreset.Pillow to listOf(1.02f, 1.10f, 1.02f, 0.92f, 1.02f, 1.10f, 1.02f, 0.92f),
-        BlobShapePreset.Wobble to listOf(0.94f, 1.18f, 0.82f, 1.05f, 1.14f, 0.88f, 1.08f, 0.96f),
+        BlobShapePreset.Splash to listOf(1.06f, 0.80f, 1.22f, 0.92f, 1.12f, 0.72f, 1.26f, 0.88f, 0.96f, 1.16f),
+        BlobShapePreset.Pebble to listOf(0.98f, 1.04f, 1.10f, 1.02f, 0.94f, 0.90f, 0.98f, 1.08f, 1.03f, 0.96f),
+        BlobShapePreset.Starburst to listOf(1.22f, 0.72f, 1.08f, 0.82f, 1.30f, 0.70f, 1.16f, 0.76f, 1.24f, 0.86f, 1.02f, 0.78f),
+        BlobShapePreset.Pillow to listOf(1.12f, 1.02f, 1.10f, 0.92f, 1.00f, 1.12f, 0.90f, 1.04f, 1.08f, 0.96f),
+        BlobShapePreset.Wobble to listOf(0.92f, 1.18f, 0.84f, 1.08f, 1.22f, 0.88f, 1.06f, 0.78f, 1.16f, 0.98f, 1.10f),
     )
 
     fun defaultSoundBlobs(now: Long = System.currentTimeMillis()): List<SoundBlob> {
@@ -153,12 +154,11 @@ object BlobDefaults {
 object BlobMapLayout {
     const val FirstRingRadius = 180f
     const val RingSpacing = 130f
-    const val MinimumBlobSpacing = 108f
+    const val MinimumBlobSpacing = 136f
 
     fun suggestedPosition(index: Int): MapPoint {
-        val ring = index / 8
-        val angle = index * 137.5f * (PI.toFloat() / 180f)
-        val radius = 180f + ring * 130f + (index % 3) * 34f
+        val angle = -PI.toFloat() / 2f + index * GOLDEN_ANGLE + ((index % 3) - 1) * 0.12f
+        val radius = 172f + sqrt(index.toFloat()) * 76f + (index % 5) * 13f
         return MapPoint(
             x = cos(angle) * radius,
             y = sin(angle) * radius,
@@ -166,10 +166,19 @@ object BlobMapLayout {
     }
 
     fun arrangedPosition(index: Int): MapPoint {
-        val ring = ringForIndex(index)
-        val slots = slotsForRing(ring)
-        val slot = index - firstIndexInRing(ring)
-        return pointOnRing(ring, slot, slots)
+        return suggestedPosition(index)
+    }
+
+    fun arrangedPositions(count: Int): List<MapPoint> {
+        val placed = mutableListOf<MapPoint>()
+        repeat(count) { index ->
+            placed += resolveOverlaps(
+                position = arrangedPosition(index),
+                occupiedPositions = placed,
+                minimumSpacing = MinimumBlobSpacing,
+            )
+        }
+        return placed
     }
 
     fun snapToArrangeSlot(position: MapPoint): MapPoint {
@@ -247,4 +256,6 @@ object BlobMapLayout {
     }
 
     private fun Int.floorMod(modulus: Int): Int = ((this % modulus) + modulus) % modulus
+
+    private const val GOLDEN_ANGLE = 2.3999631f
 }

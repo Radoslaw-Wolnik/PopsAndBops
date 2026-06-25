@@ -7,22 +7,22 @@ import kotlin.math.hypot
 
 class BlobMapLayoutTest {
     @Test
-    fun arrangedPositionStartsAtTopOfFirstRing() {
+    fun arrangedPositionStartsInTheNearbyField() {
         val position = BlobMapLayout.arrangedPosition(0)
+        val distanceFromCenter = hypot(position.x, position.y)
 
-        assertPointEquals(0f, -BlobMapLayout.FirstRingRadius, position)
+        assertTrue(distanceFromCenter >= BlobMapLayout.FirstRingRadius - 24f)
+        assertTrue(distanceFromCenter <= BlobMapLayout.FirstRingRadius + 24f)
     }
 
     @Test
-    fun arrangedPositionMovesToNextRingAfterFirstRingSlots() {
+    fun arrangedPositionSpreadsLaterBlobsFartherOut() {
+        val firstPosition = BlobMapLayout.arrangedPosition(0)
         val firstSecondRingPosition = BlobMapLayout.arrangedPosition(BlobMapLayout.slotsForRing(0))
+        val firstDistanceFromCenter = hypot(firstPosition.x, firstPosition.y)
         val distanceFromCenter = hypot(firstSecondRingPosition.x, firstSecondRingPosition.y)
 
-        assertEquals(
-            BlobMapLayout.FirstRingRadius + BlobMapLayout.RingSpacing,
-            distanceFromCenter,
-            FLOAT_TOLERANCE,
-        )
+        assertTrue(distanceFromCenter > firstDistanceFromCenter + BlobMapLayout.MinimumBlobSpacing)
     }
 
     @Test

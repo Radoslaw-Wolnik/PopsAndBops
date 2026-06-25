@@ -1,5 +1,15 @@
 package com.example.popsandbops.ui.map
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -35,9 +45,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +55,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -57,11 +66,9 @@ import com.example.popsandbops.data.MapPoint
 import com.example.popsandbops.data.SoundBlob
 import com.example.popsandbops.ui.components.BlobButton
 import com.example.popsandbops.ui.components.rememberPressFeedback
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
-import kotlin.math.sin
+import kotlinx.coroutines.launch
 
 @Composable
 fun SoundMapScreen(
@@ -76,16 +83,19 @@ fun SoundMapScreen(
     onRecordClick: () -> Unit,
     onBlobNamesVisibleChange: (Boolean) -> Unit,
 ) {
-    var pan by remember { mutableStateOf(Offset.Zero) }
-    var zoom by remember { mutableFloatStateOf(1f) }
+    val panState = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val zoomState = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
     var isArranging by remember { mutableStateOf(false) }
     var draggingBlobId by remember { mutableStateOf<String?>(null) }
     val dragOffsets = remember { mutableStateMapOf<String, Offset>() }
     val density = LocalDensity.current
     val background = MaterialTheme.colorScheme.background
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.76f)
-    val ringColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+    val fieldColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
     val recordColor = MaterialTheme.colorScheme.primary
+    val pan = panState.value
+    val zoom = zoomState.value
 
     BoxWithConstraints(
         modifier = modifier
@@ -97,8 +107,10 @@ fun SoundMapScreen(
                 } else {
                     Modifier.pointerInput(Unit) {
                         detectTransformGestures { _, gesturePan, gestureZoom, _ ->
-                            pan += gesturePan
-                            zoom = (zoom * gestureZoom).coerceIn(MIN_ZOOM, MAX_ZOOM)
+                            scope.launch {
+                                panState.snapTo(panState.value + gesturePan)
+                                zoomState.snapTo((zoomState.value * gestureZoom).coerceIn(MIN_ZOOM, MAX_ZOOM))
+                            }
                         }
                     }
                 }
@@ -107,27 +119,35 @@ fun SoundMapScreen(
         val widthPx = with(density) { maxWidth.toPx() }
         val heightPx = with(density) { maxHeight.toPx() }
         val center = Offset(widthPx / 2f, heightPx / 2f)
-        val maxDistance = blobs.maxOfOrNull { hypot(it.position.x, it.position.y) } ?: 220f
-        val guideRadii = BlobMapLayout.guideRadii(maxDistance)
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawDottedMap(
                 pan = pan,
                 zoom = zoom,
                 dotColor = gridColor,
-                ringColor = ringColor,
-                worldRadius = maxDistance + 150f,
+                fieldColor = fieldColor,
                 isArranging = isArranging,
-                guideRadii = guideRadii,
             )
         }
 
         blobs.forEach { blob ->
-            val scaledSize = with(density) { (84.dp.toPx() * zoom.coerceIn(0.82f, 1.22f)).toDp() }
+            val scaledSize = with(density) { (108.dp.toPx() * zoom.coerceIn(0.86f, 1.16f)).toDp() }
             val dragOffset = dragOffsets[blob.id] ?: Offset.Zero
-            val worldPosition = Offset(blob.position.x, blob.position.y) + dragOffset
-            val screen = center + pan + Offset(worldPosition.x * zoom, worldPosition.y * zoom)
+            val candidatePosition = MapPoint(
+                x = blob.position.x + dragOffset.x,
+                y = blob.position.y + dragOffset.y,
+            )
+            val occupiedPositions = blobs
+                .filter { it.id != blob.id }
+                .map { it.position }
             val isDragging = draggingBlobId == blob.id
+            val resolvedPosition = if (isDragging) {
+                BlobMapLayout.resolveOverlaps(candidatePosition, occupiedPositions)
+            } else {
+                candidatePosition
+            }
+            val worldPosition = Offset(resolvedPosition.x, resolvedPosition.y)
+            val screen = center + pan + Offset(worldPosition.x * zoom, worldPosition.y * zoom)
             BlobButton(
                 name = blob.name,
                 color = blob.color,
@@ -150,12 +170,16 @@ fun SoundMapScreen(
                                     onDragStart = { draggingBlobId = blob.id },
                                     onDragEnd = {
                                         val finalOffset = dragOffsets[blob.id] ?: Offset.Zero
-                                        onBlobMoved(
-                                            blob,
-                                            MapPoint(
+                                        val finalPosition = BlobMapLayout.resolveOverlaps(
+                                            position = MapPoint(
                                                 x = blob.position.x + finalOffset.x,
                                                 y = blob.position.y + finalOffset.y,
                                             ),
+                                            occupiedPositions = occupiedPositions,
+                                        )
+                                        onBlobMoved(
+                                            blob,
+                                            finalPosition,
                                         )
                                         dragOffsets.remove(blob.id)
                                         draggingBlobId = null
@@ -182,7 +206,7 @@ fun SoundMapScreen(
         }
 
         if (!isArranging) {
-            val recordSize = with(density) { (72.dp.toPx() * zoom.coerceIn(0.86f, 1.18f)).toDp() }
+            val recordSize = with(density) { (86.dp.toPx() * zoom.coerceIn(0.88f, 1.12f)).toDp() }
             val recordScreen = center + pan
             MapRecordBlob(
                 color = recordColor,
@@ -248,14 +272,42 @@ fun SoundMapScreen(
                 )
             }
             MapToolButton(icon = { Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom in") }) {
-                zoom = (zoom + 0.14f).coerceAtMost(MAX_ZOOM)
+                scope.launch {
+                    zoomState.animateTo(
+                        targetValue = (zoomState.value + 0.14f).coerceAtMost(MAX_ZOOM),
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    )
+                }
             }
             MapToolButton(icon = { Icon(Icons.Filled.ZoomOut, contentDescription = "Zoom out") }) {
-                zoom = (zoom - 0.14f).coerceAtLeast(MIN_ZOOM)
+                scope.launch {
+                    zoomState.animateTo(
+                        targetValue = (zoomState.value - 0.14f).coerceAtLeast(MIN_ZOOM),
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                    )
+                }
             }
             MapToolButton(icon = { Icon(Icons.Filled.MyLocation, contentDescription = "Center map") }) {
-                pan = Offset.Zero
-                zoom = 1f
+                scope.launch {
+                    launch {
+                        panState.animateTo(
+                            targetValue = Offset.Zero,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        )
+                    }
+                    launch {
+                        zoomState.animateTo(
+                            targetValue = 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        )
+                    }
+                }
             }
         }
 
@@ -294,9 +346,21 @@ private fun MapRecordBlob(
     size: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit,
 ) {
+    val transition = rememberInfiniteTransition(label = "record blob idle")
+    val idleScale by transition.animateFloat(
+        initialValue = 0.98f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 980, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "record blob scale",
+    )
+
     Box(
         modifier = modifier
-            .size(size),
+            .size(size)
+            .scale(idleScale),
         contentAlignment = Alignment.Center,
     ) {
         BlobButton(
@@ -397,22 +461,20 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDottedMap(
     pan: Offset,
     zoom: Float,
     dotColor: Color,
-    ringColor: Color,
-    worldRadius: Float,
+    fieldColor: Color,
     isArranging: Boolean,
-    guideRadii: List<Float>,
 ) {
     val spacing = 34f * zoom
     val origin = center + pan
-    val startX = ((-origin.x % spacing) + spacing) % spacing
-    val startY = ((-origin.y % spacing) + spacing) % spacing
+    val startX = ((origin.x % spacing) + spacing) % spacing
+    val startY = ((origin.y % spacing) + spacing) % spacing
     var x = startX
     while (x < size.width) {
         var y = startY
         while (y < size.height) {
             drawCircle(
                 color = dotColor,
-                radius = 1.7f,
+                radius = 1.45f * zoom.coerceIn(0.82f, 1.18f),
                 center = Offset(x, y),
             )
             y += spacing
@@ -421,35 +483,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDottedMap(
     }
 
     if (isArranging) {
-        guideRadii.forEachIndexed { ring, radius ->
-            drawCircle(
-                color = ringColor.copy(alpha = 0.58f),
-                radius = radius * zoom,
-                center = origin,
-                style = Stroke(width = 2.8f),
-            )
-            repeat(BlobMapLayout.slotsForRing(ring)) { slot ->
-                val slots = BlobMapLayout.slotsForRing(ring)
-                val angle = (slot / slots.toFloat()) * PI.toFloat() * 2f - PI.toFloat() / 2f
-                drawCircle(
-                    color = ringColor.copy(alpha = 0.76f),
-                    radius = 3.4f,
-                    center = origin + Offset(
-                        x = cos(angle) * radius * zoom,
-                        y = sin(angle) * radius * zoom,
-                    ),
-                )
-            }
-        }
-    } else {
-        repeat(3) { index ->
-            drawCircle(
-                color = ringColor,
-                radius = (worldRadius + index * 120f) * zoom,
-                center = origin,
-                style = Stroke(width = 2f),
-            )
-        }
+        drawCircle(
+            color = fieldColor.copy(alpha = 0.40f),
+            radius = 6.5f,
+            center = origin,
+        )
     }
 }
 

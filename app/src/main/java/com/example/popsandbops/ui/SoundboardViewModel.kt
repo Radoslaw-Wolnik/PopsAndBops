@@ -190,16 +190,21 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
             return
         }
         val trim = pending.trimRange
-        val newBlob = repository.createRecordingBlob(
+        val createdBlob = repository.createRecordingBlob(
             audioPath = pending.path,
             durationMs = pending.safeDurationMs,
             waveform = pending.waveform,
             existingCount = _uiState.value.blobs.count(),
-        ).copy(
+        )
+        val occupiedPositions = _uiState.value.blobs
+            .filter { it.isPinned }
+            .map { it.position }
+        val newBlob = createdBlob.copy(
             name = name,
             trimStartMs = trim.startMs,
             trimEndMs = trim.endMs,
             sourceDurationMs = pending.safeDurationMs,
+            position = BlobMapLayout.resolveOverlaps(createdBlob.position, occupiedPositions),
         )
         val updated = _uiState.value.blobs + newBlob
         repository.saveBlobs(updated)
@@ -254,10 +259,11 @@ class SoundboardViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun autoArrangePinnedBlobs() {
+        val arrangedPositions = BlobMapLayout.arrangedPositions(_uiState.value.blobs.count { it.isPinned })
         var pinnedIndex = 0
         val updated = _uiState.value.blobs.map { blob ->
             if (blob.isPinned) {
-                blob.copy(position = BlobMapLayout.arrangedPosition(pinnedIndex++))
+                blob.copy(position = arrangedPositions[pinnedIndex++])
             } else {
                 blob
             }

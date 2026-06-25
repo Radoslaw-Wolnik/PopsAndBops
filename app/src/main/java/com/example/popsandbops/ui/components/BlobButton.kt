@@ -46,6 +46,7 @@ fun BlobButton(
     onClick: () -> Unit,
 ) {
     val press = rememberPressFeedback(pressedScale = 0.88f)
+    val outlineColor = blobOutlineColor(color)
     val playingTransition = rememberInfiniteTransition(label = "blob playing")
     val pulse by playingTransition.animateFloat(
         initialValue = 0.96f,
@@ -87,8 +88,8 @@ fun BlobButton(
                 }) {
                     drawPath(
                         path = blobPath,
-                        color = color.copy(alpha = 0.28f * (1f - ringProgress)),
-                        style = Stroke(width = 10.dp.toPx()),
+                        color = outlineColor.copy(alpha = 0.22f * (1f - ringProgress)),
+                        style = Stroke(width = 12.dp.toPx()),
                     )
                 }
             }
@@ -101,13 +102,13 @@ fun BlobButton(
             }
             drawPath(
                 path = blobPath,
-                color = Color.White.copy(alpha = if (isPlaying) 0.92f else 0.68f),
+                color = outlineColor.copy(alpha = if (isPlaying) 0.98f else 0.74f),
                 style = Stroke(width = if (isPlaying) 4.dp.toPx() else 3.dp.toPx()),
             )
             if (isPlaying) {
                 drawPath(
                     path = blobPath,
-                    color = Color.Black.copy(alpha = 0.13f),
+                    color = Color.White.copy(alpha = 0.22f),
                     style = Stroke(width = 7.dp.toPx()),
                 )
             }
@@ -134,6 +135,7 @@ fun BlobPreview(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
 ) {
+    val outlineColor = blobOutlineColor(color)
     var pulse = 1f
     var ringProgress = 0f
     if (isSelected) {
@@ -169,7 +171,7 @@ fun BlobPreview(
             }) {
                 drawPath(
                     path = blobPath,
-                    color = color.copy(alpha = 0.24f * (1f - ringProgress)),
+                    color = outlineColor.copy(alpha = 0.22f * (1f - ringProgress)),
                     style = Stroke(width = 8.dp.toPx()),
                 )
             }
@@ -177,7 +179,7 @@ fun BlobPreview(
         drawPath(path = blobPath, color = color)
         drawPath(
             path = blobPath,
-            color = Color.White.copy(alpha = if (isSelected) 0.95f else 0.58f),
+            color = outlineColor.copy(alpha = if (isSelected) 0.98f else 0.68f),
             style = Stroke(width = if (isSelected) 4.dp.toPx() else 2.dp.toPx()),
         )
     }
@@ -223,3 +225,12 @@ fun smoothBlobPath(size: Size, points: List<Float>): Path {
 }
 
 private const val CURVE_TENSION = 0.24f
+
+private fun blobOutlineColor(color: Color): Color {
+    return Color(
+        red = (color.red * 0.68f).coerceIn(0f, 1f),
+        green = (color.green * 0.68f).coerceIn(0f, 1f),
+        blue = (color.blue * 0.68f).coerceIn(0f, 1f),
+        alpha = color.alpha,
+    )
+}

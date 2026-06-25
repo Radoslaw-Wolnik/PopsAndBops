@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#FFFCF3</color>
+    <color name="paper_warm">#FFF4D7</color>
+    <color name="quiet_dot">#D8CDAF</color>
+    <color name="bubble_pink">#FF5A7A</color>
+    <color name="bubble_teal">#28C7B7</color>
+    <color name="bubble_yellow">#FFC857</color>
+    <color name="bubble_purple">#7C5CFF</color>
+</resources>

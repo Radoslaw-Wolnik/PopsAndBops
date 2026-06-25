@@ -367,6 +367,16 @@ private fun MapRecordBlob(
         ),
         label = "record blob scale",
     )
+    val ringProgress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1180, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "record blob ring",
+    )
+    val contentColor = MaterialTheme.colorScheme.onPrimary
 
     Box(
         modifier = modifier
@@ -374,6 +384,18 @@ private fun MapRecordBlob(
             .scale(idleScale),
         contentAlignment = Alignment.Center,
     ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                color = color.copy(alpha = 0.16f * (1f - ringProgress)),
+                radius = this.size.minDimension * (0.36f + ringProgress * 0.18f),
+                center = center,
+            )
+            drawCircle(
+                color = color.copy(alpha = 0.08f),
+                radius = this.size.minDimension * 0.44f,
+                center = center,
+            )
+        }
         BlobButton(
             name = "",
             color = color,
@@ -386,12 +408,23 @@ private fun MapRecordBlob(
             modifier = Modifier.fillMaxSize(),
             onClick = onClick,
         )
-        Icon(
-            imageVector = Icons.Filled.FiberManualRecord,
-            contentDescription = "Open recorder",
-            tint = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.size(size * 0.38f),
-        )
+        Surface(
+            modifier = Modifier.size(size * 0.56f),
+            shape = CircleShape,
+            color = contentColor.copy(alpha = 0.14f),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.FiberManualRecord,
+                    contentDescription = "Open recorder",
+                    tint = contentColor,
+                    modifier = Modifier.size(size * 0.32f),
+                )
+            }
+        }
     }
 }
 

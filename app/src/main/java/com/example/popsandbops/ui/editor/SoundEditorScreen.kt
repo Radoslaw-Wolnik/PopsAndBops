@@ -191,8 +191,9 @@ fun SoundEditorScreen(
 
         Surface(
             shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.78f),
             tonalElevation = 1.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
         ) {
             Column(
                 modifier = Modifier
@@ -226,8 +227,9 @@ fun SoundEditorScreen(
 
         Surface(
             shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
             tonalElevation = 2.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)),
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -237,20 +239,29 @@ fun SoundEditorScreen(
                     value = draft.name,
                     onValueChange = { draft = draft.copy(name = it) },
                 )
-                Row(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
                 ) {
-                    Text(
-                        text = "Pin on map",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Switch(
-                        checked = draft.isPinned,
-                        onCheckedChange = { draft = draft.copy(isPinned = it) },
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 9.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Pin on map",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Switch(
+                            checked = draft.isPinned,
+                            onCheckedChange = { draft = draft.copy(isPinned = it) },
+                        )
+                    }
                 }
             }
         }
@@ -602,10 +613,10 @@ private fun EditorNameField(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(58.dp),
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.62f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            .height(56.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.34f)),
     ) {
         Box(
             modifier = Modifier
@@ -615,7 +626,7 @@ private fun EditorNameField(
         ) {
             if (value.isBlank()) {
                 Text(
-                    text = "Name",
+                    text = "Sound name",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f),
                 )

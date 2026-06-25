@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -20,11 +21,12 @@ fun WaveformView(
     trimEndMs: Int = durationMs,
     activeColor: Color = MaterialTheme.colorScheme.primary,
     inactiveColor: Color = MaterialTheme.colorScheme.outline,
+    height: Dp = 92.dp,
 ) {
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(92.dp),
+            .height(height),
     ) {
         val safeDurationMs = durationMs.coerceAtLeast(1)
         val bars = waveform.ifEmpty { List(48) { 0.14f } }

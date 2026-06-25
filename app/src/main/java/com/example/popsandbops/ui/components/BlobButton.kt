@@ -50,25 +50,31 @@ fun BlobButton(
 ) {
     val press = rememberPressFeedback(pressedScale = 0.88f)
     val outlineColor = blobOutlineColor(color)
-    val playingTransition = rememberInfiniteTransition(label = "blob playing")
-    val pulse by playingTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(420),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "blob scale",
-    )
-    val ringProgress by playingTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 780, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "blob play ring",
-    )
+    var pulse = 1f
+    var ringProgress = 0f
+    if (isPlaying) {
+        val playingTransition = rememberInfiniteTransition(label = "blob playing")
+        val animatedPulse by playingTransition.animateFloat(
+            initialValue = 0.96f,
+            targetValue = 1.06f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(420),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "blob scale",
+        )
+        val animatedRingProgress by playingTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 780, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "blob play ring",
+        )
+        pulse = animatedPulse
+        ringProgress = animatedRingProgress
+    }
 
     Box(
         modifier = modifier
